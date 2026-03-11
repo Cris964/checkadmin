@@ -1,0 +1,158 @@
+{
+  "identity": {
+    "name": "AccuCloud Pro 2026",
+    "persona": "E1 - The Anti-AI Designer",
+    "tone": "Clinical Premium, Industrial Precision, Apple-like Polish",
+    "target_audience": "Pharmaceutical & Industrial Production Managers"
+  },
+  "typography": {
+    "font_family_heading": "Manrope, sans-serif",
+    "font_family_body": "Inter, sans-serif",
+    "scale": {
+      "h1": "text-4xl md:text-5xl font-extrabold tracking-tight",
+      "h2": "text-3xl font-bold tracking-tight",
+      "h3": "text-2xl font-semibold tracking-normal",
+      "body": "text-base font-normal leading-relaxed",
+      "caption": "text-sm font-medium text-muted-foreground uppercase tracking-widest"
+    }
+  },
+  "colors": {
+    "palette_name": "Medical Frost",
+    "primary": {
+      "name": "Vibrant Indigo",
+      "hex": "#4F46E5",
+      "tailwind": "indigo-600",
+      "usage": "Primary Actions, Active States, Key Metrics"
+    },
+    "secondary": {
+      "name": "Clinical Slate",
+      "hex": "#64748B",
+      "tailwind": "slate-500",
+      "usage": "Secondary Actions, Borders, Muted Text"
+    },
+    "accent": {
+      "name": "Biohazard Rose",
+      "hex": "#E11D48",
+      "tailwind": "rose-600",
+      "usage": "Alerts, Expiry Warnings, High Risk Status"
+    },
+    "success": {
+      "name": "Safety Emerald",
+      "hex": "#10B981",
+      "tailwind": "emerald-500",
+      "usage": "Stock Available, Production OK, Profit Positive"
+    },
+    "backgrounds": {
+      "light": {
+        "app": "#F8FAFC",
+        "surface": "#FFFFFF",
+        "border": "#E2E8F0"
+      },
+      "dark": {
+        "app": "#09090B",
+        "surface": "#18181B",
+        "border": "#27272A"
+      }
+    }
+  },
+  "visual_enhancers": {
+    "border_radius": {
+      "outer_container": "rounded-[50px]",
+      "inner_card": "rounded-3xl",
+      "input": "rounded-xl",
+      "button": "rounded-full"
+    },
+    "shadows": {
+      "soft": "shadow-[0_8px_30px_rgb(0,0,0,0.04)]",
+      "deep": "shadow-[0_20px_50px_rgb(0,0,0,0.1)]",
+      "glow": "shadow-[0_0_20px_rgba(79,70,229,0.3)]"
+    },
+    "glassmorphism": {
+      "enabled": true,
+      "classes": "backdrop-blur-xl bg-white/70 dark:bg-black/60 border border-white/20"
+    },
+    "transitions": {
+      "default": "transition-all duration-300 ease-[cubic-bezier(0.25,0.1,0.25,1)]",
+      "hover": "hover:scale-[1.02] active:scale-[0.98]"
+    }
+  },
+  "layout_strategy": {
+    "container_style": "The 'Device' Look: The main app wrapper should look like a high-end industrial tablet screen floating in space (padding around it, rounded-[50px] edges, deep shadow).",
+    "grid_system": "Bento Grid (Asymmetric). Never use equal-sized generic grids. Use 12-column logic: Hero (col-span-8), Stats (col-span-4), Lists (row-span-2).",
+    "spacing": "Generous. Use 'gap-6' or 'gap-8' between cards to mimic the clean environment of a lab."
+  },
+  "components": {
+    "library": "Shadcn/UI",
+    "icons": "Lucide-React",
+    "charts": "Recharts",
+    "overrides": [
+      {
+        "component": "Card",
+        "style": "No border in light mode, just shadow. Dark mode needs 1px border. Inner padding 'p-6' minimum."
+      },
+      {
+        "component": "Button",
+        "style": "Pill-shaped (rounded-full). Primary: Indigo gradient. Secondary: White with deep shadow."
+      },
+      {
+        "component": "Table",
+        "style": "Clean, row-hover effects, sticky header. Status badges must be 'pill' style."
+      },
+      {
+        "component": "Sidebar",
+        "style": "Floating glass panel on the left, not attached to the edge. rounded-3xl."
+      }
+    ]
+  },
+  "modules_specifics": {
+    "dashboard": {
+      "layout": "Hero Chart (Revenue) + Top 5 Products List + KPI Cards.",
+      "widgets": "Real metrics. Don't use lorem ipsum for data. Box Mayor = Sales + Initial Base."
+    },
+    "tpv_sales": {
+      "layout": "Left: Product Grid (Images + Price), Right: Cart/Checkout Panel.",
+      "interaction": "Fast add-to-cart. Search bar must be huge and focused."
+    },
+    "inventory": {
+      "layout": "Data Table with 'Status' indicators. Expiring items (Date < Now + 30 days) must glow Red.",
+      "visuals": "Progress bars for stock levels."
+    },
+    "production": {
+      "layout": "Horizontal Stepper (Montada -> Alistada -> Procesada -> Terminada).",
+      "style": "Each stage is a card. Active stage is highlighted Indigo. Completed is Green."
+    },
+    "payroll": {
+      "layout": "Form (Left) + Liquidation Preview (Right).",
+      "actions": "Liquidar Button must be prominent."
+    }
+  },
+  "image_urls": {
+    "user_profile": [
+      "https://images.pexels.com/photos/3727513/pexels-photo-3727513.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "https://images.pexels.com/photos/33871730/pexels-photo-33871730.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+    ],
+    "industrial_context": [
+      "https://images.pexels.com/photos/4487382/pexels-photo-4487382.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "https://images.pexels.com/photos/4481256/pexels-photo-4481256.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "https://images.unsplash.com/photo-1720036236694-d0a231c52563?crop=entropy&cs=srgb&fm=jpg&ixid=M3w4NjAzNDR8MHwxfHNlYXJjaHwzfHxpbmR1c3RyaWFsJTIwYXV0b21hdGVkJTIwcHJvZHVjdGlvbiUyMGxpbmUlMjBjbGVhbnxlbnwwfHx8fDE3NzE1Mjk4ODJ8MA&ixlib=rb-4.1.0&q=85"
+    ],
+    "products": [
+      "https://images.pexels.com/photos/29110703/pexels-photo-29110703.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940",
+      "https://images.pexels.com/photos/3683063/pexels-photo-3683063.jpeg?auto=compress&cs=tinysrgb&dpr=2&h=650&w=940"
+    ]
+  },
+  "universal_guidelines": [
+    "DO NOT use 'Inter' for headings. Use 'Manrope'.",
+    "DO NOT use generic centered layouts. Use asymmetric bento grids.",
+    "Dark colors look good when used independently without gradients. DO NOT use dark colors as gradients.",
+    "Create depth through layered design elements with z-index hierarchy.",
+    "Use glass-morphism effects with backdrop filters (12-24px blur).",
+    "You MUST NOT apply universal transition. Eg: transition: all. This results in breaking transforms.",
+    "You MUST NOT center align the app container. This disrupts the human natural reading flow.",
+    "Every interaction needs micro-animations - hover states, transitions.",
+    "Use 2-3x more spacing than feels comfortable.",
+    "All interactive and key informational elements MUST include a data-testid attribute.",
+    "Use 'sonner' for toasts."
+  ],
+  "instructions_to_main_agent": "Implement the design using the provided palette and rounded-[50px] container strategy. Ensure the 'Production' module follows the 4-step visual workflow described. Use the image URLs for the Dashboard and Inventory mock data."
+}
