@@ -15,6 +15,7 @@ from datetime import datetime, timezone, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 import uuid
+import mercadopago
 from utils import generate_invoice_html, generate_payroll_html, send_email_async
 
 ROOT_DIR = Path(__file__).parent
@@ -95,6 +96,10 @@ security = HTTPBearer()
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "accucloud-pro-2026-secret-key-change-in-production")
 ALGORITHM = "HS256"
 ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
+
+# Mercado Pago configuration
+MP_ACCESS_TOKEN = os.environ.get("MP_ACCESS_TOKEN", "TEST-YOUR-TOKEN-HERE")
+mp_sdk = mercadopago.SDK(MP_ACCESS_TOKEN)
 
 # ==================== MODELS ====================
 
@@ -459,6 +464,11 @@ class InvoiceEmailRequest(BaseModel):
     email: str
     sale: dict
     items: list
+
+class PaymentPreferenceCreate(BaseModel):
+    items: List[SaleItem]
+    customer_email: Optional[str] = None
+    customer_name: Optional[str] = None
 
 
 # ==================== AUTH HELPERS ====================

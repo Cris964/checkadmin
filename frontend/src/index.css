@@ -14,11 +14,33 @@
 /* ===== LIGHT MODE BASE ===== */
 body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
-  background: linear-gradient(135deg, #e0e7ff 0%, #f0f4ff 50%, #ede9fe 100%);
+  background: #f8fafc; /* Standard clean background */
   min-height: 100vh;
   -webkit-font-smoothing: antialiased;
-  color: #1f2937;
+  color: #0f172a;
   transition: background 0.3s ease, color 0.3s ease;
+  position: relative;
+  overflow-x: hidden;
+}
+
+/* Background Blobs for specific pages like Login */
+.bg-blobs {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  overflow: hidden;
+  z-index: -1;
+  pointer-events: none;
+}
+
+.blob-1 { position: absolute; top: 10%; left: 5%; width: 500px; height: 500px; background: #ede9fe; border-radius: 50%; filter: blur(80px); opacity: 0.6; animation: blob-float 20s infinite alternate; }
+.blob-2 { position: absolute; bottom: 10%; right: 5%; width: 400px; height: 400px; background: #e0e7ff; border-radius: 50%; filter: blur(80px); opacity: 0.6; animation: blob-float 25s infinite alternate-reverse; }
+
+@keyframes blob-float {
+  from { transform: translate(0, 0) scale(1); }
+  to { transform: translate(50px, 50px) scale(1.1); }
 }
 
 /* ===== DARK MODE BASE ===== */
@@ -86,10 +108,10 @@ body.dark-mode {
 
 /* ===== BUTTONS ===== */
 .btn-primary {
-  background: linear-gradient(135deg, #6366f1, #4f46e5);
+  background: linear-gradient(135deg, #4f46e5, #7c3aed);
   color: white;
-  padding: 0.5rem 1.25rem;
-  border-radius: 0.75rem;
+  padding: 0.625rem 1.5rem;
+  border-radius: 9999px; /* Rounded pill like landing */
   font-weight: 600;
   font-size: 0.875rem;
   transition: all 0.25s ease;
@@ -97,11 +119,14 @@ body.dark-mode {
   cursor: pointer;
   display: inline-flex;
   align-items: center;
+  justify-content: center;
   gap: 0.5rem;
+  box-shadow: 0 4px 12px rgba(79, 70, 229, 0.25);
 }
 .btn-primary:hover {
-  transform: translateY(-2px);
-  box-shadow: 0 6px 25px rgba(99, 102, 241, 0.5);
+  transform: translateY(-1px);
+  box-shadow: 0 8px 20px rgba(79, 70, 229, 0.35);
+  filter: brightness(1.1);
 }
 .btn-primary:active { transform: translateY(0); }
 
@@ -212,20 +237,21 @@ body.dark-mode {
 
 /* ===== INPUTS ===== */
 input, select, textarea {
-  border: 1px solid #e5e7eb;
-  border-radius: 0.625rem;
-  padding: 0.625rem 0.875rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.75rem;
+  padding: 0.75rem 1rem;
   font-size: 0.875rem;
-  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+  transition: all 0.2s ease;
   width: 100%;
-  background: white;
-  color: #1f2937;
+  background: #ffffff;
+  color: #0f172a;
 }
 
 input:focus, select:focus, textarea:focus {
   outline: none;
-  border-color: #818cf8;
-  box-shadow: 0 0 0 3px rgba(129, 140, 248, 0.2);
+  border-color: #6366f1;
+  box-shadow: 0 0 0 4px rgba(99, 102, 241, 0.1);
+  background: #ffffff;
 }
 
 .dark input, .dark select, .dark textarea {

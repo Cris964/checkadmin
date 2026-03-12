@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import api from '../lib/api';
+import { toast } from 'sonner';
 import { DollarSign, CreditCard, Receipt, Banknote, Search, ShoppingCart, Plus, Minus, History, X, Package, Printer, Mail, Users2, Pencil, Trash2 } from 'lucide-react';
 
 export default function SalesTPV() {
@@ -13,6 +14,7 @@ export default function SalesTPV() {
   const [showPayment, setShowPayment] = useState(false);
   const [paymentMethod, setPaymentMethod] = useState('efectivo');
   const [amountPaid, setAmountPaid] = useState('');
+  const [isProcessingMP, setIsProcessingMP] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
   const [history, setHistory] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -58,7 +60,8 @@ export default function SalesTPV() {
       const res = await api.post('/cash-shifts', { initial_amount: parseFloat(initialAmount) || 0 });
       setShift(res.data);
       setInitialAmount('');
-    } catch (e) { alert(e.response?.data?.detail || 'Error'); }
+      toast.success('Turno de caja abierto correctamente');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error al abrir caja'); }
   };
 
   const closeShift = async () => {
@@ -68,7 +71,8 @@ export default function SalesTPV() {
       setShift(null);
       setCart([]);
       loadData();
-    } catch (e) { alert(e.response?.data?.detail || 'Error'); }
+      toast.success('Turno de caja cerrado');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error al cerrar caja'); }
   };
 
   const addToCart = (product) => {
@@ -99,6 +103,26 @@ export default function SalesTPV() {
 
   const completeSale = async () => {
     if (cart.length === 0) return;
+
+    if (paymentMethod === 'mercadopago') {
+      setIsProcessingMP(true);
+      try {
+        const prefData = {
+          items: cart,
+          customer_email: customerEmail || null,
+          customer_name: editingCustomer?.name || null
+        };
+        const res = await api.post('/payments/create-preference', prefData);
+        // Redirect to MP (sandbox or production depends on credentials)
+        window.location.href = res.data.sandbox_init_point || res.data.init_point;
+        return;
+      } catch (e) {
+        toast.error(e.response?.data?.detail || 'Error al conectar con Mercado Pago');
+        setIsProcessingMP(false);
+        return;
+      }
+    }
+
     try {
       const saleData = {
         items: cart,
@@ -123,7 +147,8 @@ export default function SalesTPV() {
       setCustomerEmail('');
       setShowInvoice(true);
       loadData();
-    } catch (e) { alert(e.response?.data?.detail || 'Error al completar venta'); }
+      toast.success('¡Venta completada con éxito!');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error al completar venta'); }
   };
 
   const printInvoice = () => {
@@ -148,12 +173,12 @@ export default function SalesTPV() {
   };
 
   const sendInvoiceEmail = async () => {
-    if (!customerEmail) { alert('Ingrese el correo del cliente'); return; }
+    if (!customerEmail) { toast.info('Ingrese el correo del cliente'); return; }
     setSendingEmail(true);
     try {
       // The email was already sent during the sale if customer_email was provided
-      alert(`Factura enviada a ${customerEmail}`);
-    } catch (e) { alert('Error al enviar'); }
+      toast.success(`Factura enviada a ${customerEmail}`);
+    } catch (e) { toast.error('Error al enviar el correo'); }
     setSendingEmail(false);
   };
 
@@ -404,10 +429,10 @@ export default function SalesTPV() {
             <p className="text-2xl font-bold text-primary-600 mb-4 text-center">{fmt(cartTotal)}</p>
             <div className="space-y-3">
               <label className="block text-sm font-semibold">Método de Pago</label>
-              <div className="grid grid-cols-3 gap-2">
-                {['efectivo', 'tarjeta', 'transferencia'].map((m) => (
+              <div className="grid grid-cols-2 gap-2">
+                {['efectivo', 'tarjeta', 'transferencia', 'mercadopago'].map((m) => (
                   <button key={m} onClick={() => setPaymentMethod(m)} className={`p-2 rounded-lg text-sm font-medium border transition-all ${paymentMethod === m ? 'border-primary-500 bg-primary-50 text-primary-700' : 'border-gray-200'}`}>
-                    {m.charAt(0).toUpperCase() + m.slice(1)}
+                    {m === 'mercadopago' ? 'Mercado Pago' : m.charAt(0).toUpperCase() + m.slice(1)}
                   </button>
                 ))}
               </div>
@@ -424,8 +449,20 @@ export default function SalesTPV() {
               </div>
             </div>
             <div className="flex gap-2 mt-6">
-              <button onClick={() => setShowPayment(false)} className="flex-1 py-2.5 border border-gray-200 rounded-lg font-medium hover:bg-gray-50 transition-colors">Cancelar</button>
-              <button onClick={completeSale} className="flex-1 btn-primary justify-center py-2.5">Confirmar</button>
+              <button 
+                onClick={() => setShowPayment(false)} 
+                disabled={isProcessingMP}
+                className="flex-1 py-2.5 border border-gray-200 rounded-lg font-medium hover:bg-gray-50 transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                onClick={completeSale} 
+                disabled={isProcessingMP}
+                className="flex-1 btn-primary justify-center py-2.5 disabled:opacity-50"
+              >
+                {isProcessingMP ? 'Procesando...' : (paymentMethod === 'mercadopago' ? 'Ir a pagar' : 'Confirmar')}
+              </button>
             </div>
           </div>
         </div>

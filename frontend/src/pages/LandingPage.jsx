@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { toast } from 'sonner';
 import { CheckCircle2, ArrowRight, Shield, Zap, BarChart, Smartphone, Globe, CreditCard } from 'lucide-react';
 
 export default function LandingPage() {
@@ -10,7 +11,7 @@ export default function LandingPage() {
     setLoading(true);
     // Simular el pago / pasarela de Stripe por ahora
     setTimeout(() => {
-      alert(`¡Suscripción al plan ${plan} exitosa! Ahora puedes registrar tu empresa.`);
+      toast.success(`¡Suscripción al plan ${plan} exitosa! Ahora puedes registrar tu empresa.`);
       navigate('/login');
       setLoading(false);
     }, 1500);

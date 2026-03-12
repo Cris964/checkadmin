@@ -56,7 +56,7 @@ export default function Sidebar({ onClose }) {
              <div className="w-10 h-10 flex items-center justify-center overflow-hidden flex-shrink-0 drop-shadow-sm">
                 <img src="/logo-icon-trans.png" alt="ChekAdmin Icon" className="w-full h-full object-contain" />
              </div>
-             <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+             <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">
                ChekAdmin
              </h1>
           </div>
@@ -70,13 +70,13 @@ export default function Sidebar({ onClose }) {
       </div>
 
       {/* User Info */}
-      <div className="flex items-center gap-3 p-3 rounded-xl bg-gray-50 dark:bg-gray-800/50 mb-6">
-        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-lg">
+      <div className="flex items-center gap-3 p-3 rounded-2xl bg-slate-50 dark:bg-slate-800/50 mb-6 border border-slate-100 dark:border-slate-800">
+        <div className="w-10 h-10 rounded-full bg-gradient-to-br from-indigo-600 to-purple-600 flex items-center justify-center text-white font-bold text-sm shadow-lg shadow-indigo-200 dark:shadow-none">
           {user.name?.charAt(0) || 'U'}
         </div>
         <div className="overflow-hidden">
-          <p className="text-sm font-semibold text-gray-800 truncate">{user.name || 'Usuario'}</p>
-          <p className="text-xs text-gray-400 truncate">{user.email || ''}</p>
+          <p className="text-sm font-bold text-slate-800 dark:text-slate-200 truncate">{user.name || 'Usuario'}</p>
+          <p className="text-[11px] text-slate-500 truncate">{user.email || ''}</p>
         </div>
       </div>
 

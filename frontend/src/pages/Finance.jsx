@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../lib/api';
+import { toast } from 'sonner';
 import { Plus, Wallet, TrendingDown, X, Calendar, BarChart3, PieChart, Trash2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 
 export default function Finance() {
@@ -44,11 +45,16 @@ export default function Finance() {
     setShowForm(false);
     setForm({ type: 'caja_menor', payment_method: 'efectivo', card_detail: '', amount: '', description: '', category: '' });
     loadData(); loadCajaMayor(); loadBalance();
+    toast.success('Transacción registrada');
   };
 
   const deleteTransaction = async (id) => {
     if (!confirm('¿Eliminar transacción?')) return;
-    try { await api.delete(`/transactions/${id}`); loadData(); loadCajaMayor(); loadBalance(); } catch (e) { alert('Error'); }
+    try { 
+      await api.delete(`/transactions/${id}`); 
+      loadData(); loadCajaMayor(); loadBalance(); 
+      toast.success('Transacción eliminada');
+    } catch (e) { toast.error('Error al eliminar'); }
   };
 
   const cajaItems = transactions.filter((t) => t.type === 'caja_menor');

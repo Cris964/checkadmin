@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../lib/api';
+import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Package, MapPin, X, Eye, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function Inventory() {
@@ -54,7 +55,8 @@ export default function Inventory() {
       setEditingProduct(null);
       setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '' });
       loadData();
-    } catch (e) { alert(e.response?.data?.detail || 'Error'); }
+      toast.success(editingProduct ? 'Producto actualizado' : 'Producto creado');
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error al guardar producto'); }
   };
 
   const editProduct = (p) => {
@@ -67,6 +69,7 @@ export default function Inventory() {
     if (!confirm('¿Eliminar producto?')) return;
     await api.delete(`/products/${id}`);
     loadData();
+    toast.success('Producto eliminado');
   };
 
   const createWarehouse = async (e) => {
@@ -75,12 +78,14 @@ export default function Inventory() {
     setShowWarehouseForm(false);
     setWhForm({ name: '', location: '', description: '' });
     loadData();
+    toast.success('Bodega creada');
   };
 
   const deleteWarehouse = async (id) => {
     if (!confirm('¿Eliminar bodega?')) return;
     await api.delete(`/warehouses/${id}`);
     loadData();
+    toast.success('Bodega eliminada');
   };
 
   const fmt = (n) => `$${(n || 0).toLocaleString('es-CO')}`;

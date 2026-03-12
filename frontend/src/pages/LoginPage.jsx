@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
-import { Eye, EyeOff, CheckCircle2, ShieldCheck, BarChart3 } from 'lucide-react';
+import { toast } from 'sonner';
+import { Eye, EyeOff, CheckCircle2, ShieldCheck, BarChart3, ArrowRight } from 'lucide-react';
 
 export default function LoginPage() {
   const [tab, setTab] = useState('login');
@@ -22,9 +23,10 @@ export default function LoginPage() {
       const res = await api.post('/auth/login', { email, password });
       localStorage.setItem('token', res.data.access_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
+      toast.success('¡Bienvenido de nuevo!');
       navigate('/dashboard');
     } catch (err) {
-      setError(err.response?.data?.detail || 'Error al iniciar sesión');
+      toast.error(err.response?.data?.detail || 'Error al iniciar sesión');
     } finally {
       setLoading(false);
     }
@@ -49,13 +51,19 @@ export default function LoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4"
-         style={{ background: 'linear-gradient(135deg, #0f0c29 0%, #302b63 50%, #24243e 100%)' }}>
-      <div className="glass-card max-w-4xl w-full grid md:grid-cols-2 overflow-hidden animate-fade-in"
-           style={{ background: 'rgba(255,255,255,0.95)', backdropFilter: 'blur(30px)' }}>
+    <div className="min-h-screen flex items-center justify-center p-4 relative font-sans overflow-hidden bg-slate-50">
+      {/* Background Blobs */}
+      <div className="bg-blobs">
+        <div className="blob-1"></div>
+        <div className="blob-2"></div>
+      </div>
+
+      <div className="max-w-4xl w-full grid md:grid-cols-2 overflow-hidden animate-fade-in bg-white border border-slate-200 shadow-2xl rounded-[2.5rem]">
         {/* Left - Branding */}
-        <div className="p-10 flex flex-col justify-center"
-             style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', color: 'white' }}>
+        <div className="p-12 flex flex-col justify-center relative overflow-hidden text-white"
+             style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)' }}>
+          <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/10 rounded-full -translate-y-16 translate-x-16"></div>
+          <div className="relative z-10 w-full">
           <div className="mb-2">
             <div className="mb-8 flex justify-center lg:justify-start">
                <img src="/logo-full-trans.png" alt="ChekAdmin Logo" className="h-24 sm:h-28 w-auto object-contain drop-shadow-2xl" />
@@ -88,47 +96,64 @@ export default function LoginPage() {
         </div>
 
         {/* Right - Form */}
-        <div className="p-10">
+        <div className="p-12">
+          {/* Logo Mobie/Title */}
+          <div className="md:hidden flex flex-col items-center mb-6">
+             <img src="/logo-icon-trans.png" alt="ChekAdmin" className="w-12 h-12 mb-2" />
+             <span className="text-xl font-bold bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">ChekAdmin</span>
+          </div>
+
+          <h1 className="text-2xl font-bold text-slate-900 mb-2">
+            {tab === 'login' ? 'Bienvenido' : 'Crear Cuenta'}
+          </h1>
+          <p className="text-slate-500 text-sm mb-6">
+            {tab === 'login' ? 'Ingresa tus credenciales para continuar.' : 'Únete al ERP industrial más potente.'}
+          </p>
+
           {/* Tabs */}
-          <div className="flex bg-gray-100 p-1 rounded-lg mb-6">
+          <div className="flex bg-slate-100 p-1 rounded-2xl mb-8">
             <button
               onClick={() => setTab('login')}
-              className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all ${
-                tab === 'login' ? 'tab-active' : 'tab-inactive'
+              className={`flex-1 py-3 text-sm font-semibold rounded-xl transition-all ${
+                tab === 'login' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              Iniciar Sesión
+              Entrar
             </button>
             <button
               onClick={() => setTab('register')}
-              className={`flex-1 py-2.5 text-sm font-medium rounded-md transition-all ${
-                tab === 'register' ? 'tab-active' : 'tab-inactive'
+              className={`flex-1 py-3 text-sm font-semibold rounded-xl transition-all ${
+                tab === 'register' ? 'bg-white text-indigo-600 shadow-sm' : 'text-slate-500 hover:text-slate-700'
               }`}
             >
-              Registrarse
+              Registro
             </button>
           </div>
 
-          <div className="mb-6 flex justify-center">
+          <div className="mb-8">
             <button
               type="button"
               onClick={() => {
                 setTab('login');
                 setEmail('admin@demo.com');
                 setPassword('Demo2026!');
+                toast.info('Credenciales demo aplicadas');
               }}
-              className="text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors flex items-center gap-2"
+              className="w-full flex items-center justify-between p-4 rounded-2xl bg-indigo-50 border border-indigo-100 text-indigo-600 hover:bg-indigo-100 transition-all group"
             >
-              <Eye size={16} />
-              Ingresar a Versión Demo
+              <div className="flex items-center gap-3">
+                <div className="p-2 bg-indigo-600 text-white rounded-lg">
+                  <Eye size={18} />
+                </div>
+                <div className="text-left">
+                  <p className="text-sm font-bold">Ver Versión Demo</p>
+                  <p className="text-xs text-indigo-400">Prueba todas las funciones</p>
+                </div>
+              </div>
+              <ArrowRight size={18} className="transform group-hover:translate-x-1 transition-transform" />
             </button>
           </div>
 
-          {error && (
-            <div className="bg-red-50 text-red-600 px-4 py-3 rounded-xl text-sm mb-4 animate-fade-in border border-red-100">
-              {error}
-            </div>
-          )}
 
           {tab === 'login' ? (
             <form onSubmit={handleLogin} className="space-y-4">

@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../lib/api';
+import { toast } from 'sonner';
 import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign } from 'lucide-react';
 
 export default function Production() {
@@ -28,9 +29,10 @@ export default function Production() {
 
   const createOrder = async () => {
     const recipe = recipes.find((r) => r.id === selectedRecipe);
-    if (!recipe) return;
+    if (!recipe) { toast.error('Selecciona una receta'); return; }
     await api.post('/production-orders', { recipe_id: recipe.id, recipe_name: recipe.name, start_time: orderStartTime || null });
     setShowOrderForm(false); setSelectedRecipe(''); setOrderStartTime(''); loadData();
+    toast.success('Orden de producción creada');
   };
 
   const advanceOrder = async (orderId, newStage) => {
@@ -38,12 +40,14 @@ export default function Production() {
     if (newStage === 'terminada') updateData.end_time = new Date().toISOString();
     await api.put(`/production-orders/${orderId}`, updateData);
     loadData();
+    toast.info(`Orden avanzada a etapa: ${newStage}`);
   };
 
   const createRecipe = async (e) => {
     e.preventDefault();
     await api.post('/recipes', { ...recipeForm, expected_quantity: parseInt(recipeForm.expected_quantity), ingredients: recipeForm.ingredients });
     setShowRecipeForm(false); setRecipeForm({ name: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', ingredients: [] }); loadData();
+    toast.success('Receta/Kit creado correctamente');
   };
 
   const addIngredient = () => {
@@ -56,6 +60,7 @@ export default function Production() {
     e.preventDefault();
     await api.post('/raw-materials', { ...materialForm, current_stock: parseFloat(materialForm.current_stock), min_stock: parseFloat(materialForm.min_stock), cost_per_unit: parseFloat(materialForm.cost_per_unit) });
     setShowMaterialForm(false); setMaterialForm({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', cost_per_unit: '', supplier: '' }); loadData();
+    toast.success('Materia prima registrada');
   };
 
   const stages = ['montada', 'alistada', 'procesada', 'terminada'];

@@ -18,9 +18,13 @@ function ProtectedRoute({ children }) {
   return token ? children : <Navigate to="/login" replace />;
 }
 
+import { Toaster } from 'sonner';
+
 export default function App() {
   return (
-    <BrowserRouter>
+    <>
+      <Toaster position="top-right" richColors closeButton />
+      <BrowserRouter>
       <Routes>
         <Route path="/" element={<LandingPage />} />
         <Route path="/login" element={<LoginPage />} />
@@ -47,5 +51,6 @@ export default function App() {
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
     </BrowserRouter>
+    </>
   );
 }

@@ -28,7 +28,7 @@ export default function Layout() {
         <header className="md:hidden flex items-center justify-between p-4 bg-white dark:bg-gray-800 border-b border-gray-200 dark:border-gray-700">
           <div className="flex items-center gap-2">
             <img src="/logo-icon-trans.png" alt="Logo" className="w-8 h-8 object-contain" />
-            <span className="font-bold text-lg text-primary-600">ChekAdmin</span>
+            <span className="font-bold text-lg bg-gradient-to-r from-indigo-600 to-purple-600 bg-clip-text text-transparent">ChekAdmin</span>
           </div>
           <button onClick={() => setSidebarOpen(true)} className="p-2 text-gray-600 dark:text-gray-300">
             <Menu size={24} />
