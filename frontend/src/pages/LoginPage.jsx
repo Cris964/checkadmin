@@ -57,13 +57,10 @@ export default function LoginPage() {
         <div className="p-10 flex flex-col justify-center"
              style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', color: 'white' }}>
           <div className="mb-2">
-            <div className="w-20 h-20 overflow-hidden rounded-xl shadow-lg mb-4 bg-white">
-               <img src="/logo.png" alt="ChekAdmin Logo" className="w-[200%] h-[200%] max-w-none object-cover object-[0%_15%]" />
+            <div className="bg-white rounded-2xl shadow-xl p-4 mb-6 inline-flex items-center justify-center border-4 border-white/10">
+               <img src="/logo-full.png" alt="ChekAdmin Logo" className="h-14 sm:h-16 w-auto object-contain" />
             </div>
-            <h1 className="text-4xl font-extrabold mb-1 bg-gradient-to-r from-indigo-300 to-purple-300 bg-clip-text text-transparent">
-              ChekAdmin
-            </h1>
-            <p className="text-xs tracking-[0.3em] text-indigo-300 mb-6">ERP INDUSTRIAL</p>
+            <p className="text-xs tracking-[0.3em] text-indigo-200 mb-6 font-semibold">ERP INDUSTRIAL</p>
           </div>
           <p className="text-indigo-200 text-lg mb-8 leading-relaxed">
             Sistema ERP Industrial de última generación para la gestión integral de su empresa.

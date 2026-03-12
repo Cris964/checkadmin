@@ -46,8 +46,8 @@ export default function Sidebar() {
       {/* Logo */}
       <div className="p-6">
         <div className="flex items-center gap-3 relative mb-2">
-          <div className="w-10 h-10 overflow-hidden rounded shadow-sm">
-             <img src="/logo.png" alt="CheckAdmin Logo" className="w-[200%] h-[200%] max-w-none object-cover object-[0%_15%]" />
+          <div className="w-10 h-10 bg-white rounded-lg shadow flex items-center justify-center overflow-hidden flex-shrink-0">
+             <img src="/logo-icon.png" alt="ChekAdmin Icon" className="w-full h-full object-contain p-1" />
           </div>
           <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
             ChekAdmin
