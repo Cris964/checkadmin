@@ -57,8 +57,11 @@ export default function LoginPage() {
         <div className="p-10 flex flex-col justify-center"
              style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', color: 'white' }}>
           <div className="mb-2">
+            <div className="w-20 h-20 overflow-hidden rounded-xl shadow-lg mb-4 bg-white">
+               <img src="/logo.png" alt="ChekAdmin Logo" className="w-[200%] h-[200%] max-w-none object-cover object-[0%_15%]" />
+            </div>
             <h1 className="text-4xl font-extrabold mb-1 bg-gradient-to-r from-indigo-300 to-purple-300 bg-clip-text text-transparent">
-              CheckAdmin
+              ChekAdmin
             </h1>
             <p className="text-xs tracking-[0.3em] text-indigo-300 mb-6">ERP INDUSTRIAL</p>
           </div>

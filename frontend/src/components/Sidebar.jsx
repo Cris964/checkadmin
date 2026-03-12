@@ -44,11 +44,16 @@ export default function Sidebar() {
     <aside className="glass-card w-72 min-h-screen flex flex-col p-5 sticky top-0 overflow-y-auto no-print"
            style={{ borderRadius: '0 1rem 1rem 0', minWidth: '280px' }}>
       {/* Logo */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold bg-gradient-to-r from-indigo-500 to-purple-600 bg-clip-text text-transparent">
-          CheckAdmin
-        </h1>
-        <p className="text-xs tracking-[0.3em] text-gray-400 mt-0.5">ERP INDUSTRIAL</p>
+      <div className="p-6">
+        <div className="flex items-center gap-3 relative mb-2">
+          <div className="w-10 h-10 overflow-hidden rounded shadow-sm">
+             <img src="/logo.png" alt="CheckAdmin Logo" className="w-[200%] h-[200%] max-w-none object-cover object-[0%_15%]" />
+          </div>
+          <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+            ChekAdmin
+          </h1>
+        </div>
+        <p className="text-[10px] font-bold tracking-widest text-gray-500 uppercase mt-1 pl-1">ERP Industrial</p>
       </div>
 
       {/* User Info */}
