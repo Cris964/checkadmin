@@ -24,7 +24,7 @@ export default function Settings() {
       setUser(updated);
       setSaved(true);
       setTimeout(() => setSaved(false), 3000);
-    } catch (e) { alert('Error al guardar'); }
+    } catch (e) { toast.error('Error al guardar'); }
     setSaving(false);
   };
 
@@ -45,7 +45,7 @@ export default function Settings() {
       const updated = { ...user, photo_url: res.data.image_url };
       localStorage.setItem('user', JSON.stringify(updated));
       setUser(updated);
-    } catch (e) { alert('Error al subir imagen'); }
+    } catch (e) { toast.error('Error al subir imagen'); }
   };
 
   return (

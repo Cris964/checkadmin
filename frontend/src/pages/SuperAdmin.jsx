@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import api from '../lib/api';
+import { toast } from 'sonner';
 import { Building2, Users2, Search, ArrowDown, ArrowRight } from 'lucide-react';
 
 export default function SuperAdmin() {
@@ -23,7 +24,7 @@ export default function SuperAdmin() {
       setUsers(usrRes.data);
     } catch (e) {
       console.error(e);
-      alert('Error cargando datos de Superadministrador.');
+      toast.error('Error cargando datos de Superadministrador.');
     } finally {
       setLoading(false);
     }

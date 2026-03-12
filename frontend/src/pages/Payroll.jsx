@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef } from 'react';
 import api from '../lib/api';
+import { toast } from 'sonner';
 import { Plus, Trash2, DollarSign, X, Printer, Mail, User } from 'lucide-react';
 
 export default function Payroll() {
@@ -40,7 +41,7 @@ export default function Payroll() {
       setLiqForm({ days_worked: '30', extra_hours: '0' });
       setShowPayslip(true);
       loadData();
-    } catch (e) { alert(e.response?.data?.detail || 'Error al liquidar'); }
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error al liquidar'); }
   };
 
   const printPayslip = () => {
@@ -254,9 +255,9 @@ export default function Payroll() {
                       liquidation: lastLiquidation,
                       employee: lastLiquidation.employee || showLiquidate
                     });
-                    alert(`Comprobante enviado exitosamente a ${email}`);
+                    toast.success(`Comprobante enviado exitosamente a ${email}`);
                   } catch (e) {
-                    alert(e.response?.data?.detail || 'Error al enviar el comprobante');
+                    toast.error(e.response?.data?.detail || 'Error al enviar el comprobante');
                   }
                 }
               }} className="flex-1 btn-success justify-center py-2.5">
