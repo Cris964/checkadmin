@@ -486,9 +486,20 @@ export default function SalesTPV() {
               <button onClick={printInvoice} className="flex-1 btn-primary justify-center py-2.5">
                 <Printer size={16} /> Imprimir
               </button>
-              <button onClick={() => {
+              <button onClick={async () => {
                 const email = lastSale.customer_email || prompt('Ingrese el correo del cliente:');
-                if (email) { alert(`Factura enviada a ${email}`); }
+                if (email) {
+                  try {
+                    await api.post('/sales/send-email', {
+                      email,
+                      sale: lastSale,
+                      items: lastSale.items
+                    });
+                    alert(`Factura enviada exitosamente a ${email}`);
+                  } catch (e) {
+                    alert(e.response?.data?.detail || 'Error al enviar la factura');
+                  }
+                }
               }} className="flex-1 btn-success justify-center py-2.5">
                 <Mail size={16} /> Enviar
               </button>

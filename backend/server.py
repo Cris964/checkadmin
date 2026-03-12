@@ -429,6 +429,19 @@ class CustomerUpdate(BaseModel):
     address: Optional[str] = None
     document: Optional[str] = None
 
+# ==================== EMAIL REQUEST MODELS ====================
+
+class PayrollEmailRequest(BaseModel):
+    email: str
+    liquidation: dict
+    employee: dict
+
+class InvoiceEmailRequest(BaseModel):
+    email: str
+    sale: dict
+    items: list
+
+
 # ==================== AUTH HELPERS ====================
 
 def hash_password(password: str) -> str:
@@ -1245,6 +1258,28 @@ async def get_balance_general(current_user: dict = Depends(get_current_user)):
         },
         "balance_neto": total_ventas + total_caja_menor - total_gastos - total_nomina
     }
+
+# ==================== EMAILS ====================
+
+@api_router.post("/payroll/send-email")
+async def send_payroll_email_endpoint(req: PayrollEmailRequest, current_user: dict = Depends(get_current_user)):
+    html_content = generate_payroll_html(req.liquidation, req.employee)
+    success = await send_email_async(req.email, f"Comprobante de Nómina - {req.employee.get('name', '')}", html_content)
+    if success:
+        return {"message": "Email sent successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Error enviando email. Verifique configuración de Brevo en el servidor.")
+
+@api_router.post("/sales/send-email")
+async def send_invoice_email_endpoint(req: InvoiceEmailRequest, current_user: dict = Depends(get_current_user)):
+    html_content = generate_invoice_html(req.sale, req.items)
+    # Using a safe fallback for ID
+    sale_id = req.sale.get('id', 'N/A')
+    success = await send_email_async(req.email, f"Factura Electrónica #{sale_id[:8].upper()}", html_content)
+    if success:
+        return {"message": "Email sent successfully"}
+    else:
+        raise HTTPException(status_code=500, detail="Error enviando email. Verifique configuración de Brevo en el servidor.")
 
 # ==================== NOTIFICATIONS ====================
 

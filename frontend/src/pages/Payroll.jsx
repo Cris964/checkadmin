@@ -245,9 +245,20 @@ export default function Payroll() {
               <button onClick={printPayslip} className="flex-1 btn-primary justify-center py-2.5">
                 <Printer size={16} /> Imprimir
               </button>
-              <button onClick={() => {
+              <button onClick={async () => {
                 const email = lastLiquidation.employee?.email || prompt('Ingrese el correo del empleado:');
-                if (email) alert(`Comprobante enviado a ${email}`);
+                if (email) {
+                  try {
+                    await api.post('/payroll/send-email', {
+                      email,
+                      liquidation: lastLiquidation,
+                      employee: lastLiquidation.employee || showLiquidate
+                    });
+                    alert(`Comprobante enviado exitosamente a ${email}`);
+                  } catch (e) {
+                    alert(e.response?.data?.detail || 'Error al enviar el comprobante');
+                  }
+                }
               }} className="flex-1 btn-success justify-center py-2.5">
                 <Mail size={16} /> Enviar
               </button>
