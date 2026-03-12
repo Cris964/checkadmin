@@ -108,7 +108,7 @@ export default function Payroll() {
               <div className="w-12 h-12 rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center text-white font-bold text-lg flex-shrink-0 overflow-hidden">
                 {emp.photo_url ? <img src={emp.photo_url} alt={emp.name} className="w-full h-full object-cover" /> : emp.name?.charAt(0) || <User size={20} />}
               </div>
-              <div className="flex-1 grid grid-cols-5 gap-4 items-center">
+              <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4 items-start sm:items-center">
                 <div><p className="text-xs font-semibold text-gray-400 tracking-wider">DOCUMENTO</p><p className="font-bold text-gray-800">{emp.document}</p></div>
                 <div><p className="text-xs font-semibold text-gray-400 tracking-wider">NOMBRE</p><p className="font-bold text-gray-800">{emp.name}</p>{emp.email && <p className="text-xs text-gray-400">{emp.email}</p>}</div>
                 <div><p className="text-xs font-semibold text-gray-400 tracking-wider">SALARIO BASE</p><p className="font-bold text-primary-600">{fmt(emp.base_salary)}</p></div>
@@ -147,7 +147,7 @@ export default function Payroll() {
                   <p className="text-xs text-gray-400">Costo empresa: {fmt(l.employer_total_cost)}</p>
                 </div>
               </div>
-              <div className="grid grid-cols-4 gap-4 mt-3 text-xs bg-gray-50 rounded-lg p-3">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3 text-xs bg-gray-50 rounded-lg p-3">
                 <div><span className="text-gray-400">Salario Base:</span> <span className="font-semibold">{fmt(l.base_salary)}</span></div>
                 <div><span className="text-gray-400">Horas Extra:</span> <span className="font-semibold">{fmt(l.extra_hours_pay)}</span></div>
                 <div><span className="text-gray-400">Transporte:</span> <span className="font-semibold">{fmt(l.transport_subsidy)}</span></div>

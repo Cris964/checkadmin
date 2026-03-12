@@ -141,7 +141,7 @@ export default function Inventory() {
                   <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
                     {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover rounded-lg" /> : <Package size={24} className="text-gray-300" />}
                   </div>
-                  <div className="grid grid-cols-7 flex-1 items-center gap-4">
+                  <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 flex-1 items-start sm:items-center gap-4">
                     <div>
                       <p className="text-xs font-semibold text-gray-400 tracking-wider">SKU</p>
                       <p className="font-bold text-gray-800">{p.sku}</p>

@@ -1,4 +1,5 @@
-from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File
+from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Request
+from fastapi.responses import JSONResponse
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -69,6 +70,24 @@ def get_db():
 # Create the main app
 app = FastAPI()
 api_router = APIRouter(prefix="/api")
+
+@app.middleware("http")
+async def demo_user_readonly_middleware(request: Request, call_next):
+    if request.method in ["POST", "PUT", "DELETE", "PATCH"]:
+        if request.url.path not in ["/api/auth/login", "/api/auth/register"]:
+            auth_header = request.headers.get("Authorization")
+            if auth_header and auth_header.startswith("Bearer "):
+                token = auth_header.split(" ")[1]
+                try:
+                    payload = jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+                    if payload.get("email") == "admin@demo.com":
+                        return JSONResponse(
+                            status_code=403,
+                            content={"detail": "Acción no permitida en la versión de prueba."}
+                        )
+                except Exception:
+                    pass
+    return await call_next(request)
 
 # Security
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -463,11 +482,35 @@ async def get_current_user(credentials: HTTPAuthorizationCredentials = Depends(s
         user_id: str = payload.get("user_id")
         company_id: str = payload.get("company_id")
         role: str = payload.get("role", "user")
+        email: str = payload.get("email")
         if user_id is None or company_id is None:
             raise HTTPException(status_code=401, detail="Invalid token")
-        return {"user_id": user_id, "company_id": company_id, "email": payload.get("email"), "role": role}
+        return {"user_id": user_id, "company_id": company_id, "email": email, "role": role}
     except JWTError:
         raise HTTPException(status_code=401, detail="Invalid token")
+
+async def get_superadmin_user(current_user: dict = Depends(get_current_user)):
+    if current_user.get("email") != "admin@chekadmin.com":
+        raise HTTPException(status_code=403, detail="Requiere permisos de superadministrador")
+    return current_user
+
+# ==================== SUPERADMIN ====================
+
+@api_router.get("/superadmin/companies")
+async def get_all_companies(current_user: dict = Depends(get_superadmin_user)):
+    companies = await db.companies.find({}, {"_id": 0}).to_list(1000)
+    for c in companies:
+        if isinstance(c.get('created_at'), str):
+            c['created_at'] = datetime.fromisoformat(c['created_at'])
+    return companies
+
+@api_router.get("/superadmin/users")
+async def get_all_users(current_user: dict = Depends(get_superadmin_user)):
+    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
+    for u in users:
+        if isinstance(u.get('created_at'), str):
+            u['created_at'] = datetime.fromisoformat(u['created_at'])
+    return users
 
 # ==================== ROUTES ====================
 

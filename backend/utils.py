@@ -248,6 +248,8 @@ async def send_email_async(to_email: str, subject: str, html_content: str) -> bo
         return True
     except ApiException as e:
         print(f"Failed to send email via Brevo: {e}")
+        if hasattr(e, 'body'):
+            print(f"Brevo API Response Body: {e.body}")
         return False
     except Exception as e:
         print(f"Failed to send email: {str(e)}")

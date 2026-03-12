@@ -22,7 +22,7 @@ export default function LoginPage() {
       const res = await api.post('/auth/login', { email, password });
       localStorage.setItem('token', res.data.access_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.detail || 'Error al iniciar sesión');
     } finally {
@@ -40,7 +40,7 @@ export default function LoginPage() {
       });
       localStorage.setItem('token', res.data.access_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
-      navigate('/');
+      navigate('/dashboard');
     } catch (err) {
       setError(err.response?.data?.detail || 'Error al registrarse');
     } finally {
@@ -106,6 +106,21 @@ export default function LoginPage() {
               }`}
             >
               Registrarse
+            </button>
+          </div>
+
+          <div className="mb-6 flex justify-center">
+            <button
+              type="button"
+              onClick={() => {
+                setTab('login');
+                setEmail('admin@demo.com');
+                setPassword('Demo2026!');
+              }}
+              className="text-indigo-600 bg-indigo-50 px-4 py-2 rounded-lg text-sm font-medium hover:bg-indigo-100 transition-colors flex items-center gap-2"
+            >
+              <Eye size={16} />
+              Ingresar a Versión Demo
             </button>
           </div>
 

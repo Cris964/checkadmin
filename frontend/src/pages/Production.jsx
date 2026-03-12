@@ -242,7 +242,7 @@ export default function Production() {
           {rawMaterials.length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas</p> : rawMaterials.map((m) => (
             <div key={m.id} className="data-row gap-4">
               <Boxes size={20} className="text-primary-400 flex-shrink-0" />
-              <div className="flex-1 grid grid-cols-5 gap-4">
+              <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-5 gap-4">
                 <div><p className="text-xs text-gray-400 font-semibold tracking-wider">NOMBRE</p><p className="font-bold text-sm text-gray-800">{m.name}</p></div>
                 <div><p className="text-xs text-gray-400 font-semibold tracking-wider">SKU</p><p className="font-bold text-sm text-gray-800">{m.sku}</p></div>
                 <div><p className="text-xs text-gray-400 font-semibold tracking-wider">STOCK</p><p className={`font-bold text-sm ${m.current_stock <= m.min_stock ? 'text-red-600' : 'text-gray-800'}`}>{m.current_stock} / {m.min_stock} {m.unit}</p></div>

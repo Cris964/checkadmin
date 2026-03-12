@@ -2,22 +2,28 @@ import { NavLink, useNavigate } from 'react-router-dom';
 import { useState, useEffect } from 'react';
 import {
   LayoutDashboard, ShoppingCart, Package, Factory, Users2,
-  DollarSign, BarChart3, Settings, LogOut, Shield, Moon, Sun
+  DollarSign, BarChart3, Settings, LogOut, Shield, Moon, Sun, X, Building2
 } from 'lucide-react';
 
-const navItems = [
-  { to: '/', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/sales', icon: ShoppingCart, label: 'Ventas TPV' },
-  { to: '/inventory', icon: Package, label: 'Inventario' },
-  { to: '/production', icon: Factory, label: 'Producción' },
-  { to: '/payroll', icon: Users2, label: 'Nómina' },
-  { to: '/finance', icon: DollarSign, label: 'Finanzas' },
-  { to: '/reports', icon: BarChart3, label: 'Reportes' },
-  { to: '/users', icon: Shield, label: 'Usuarios' },
-  { to: '/settings', icon: Settings, label: 'Configuración' },
-];
+const getNavItems = (userEmail) => {
+  const items = [
+    { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+    { to: '/dashboard/sales', icon: ShoppingCart, label: 'Ventas TPV' },
+    { to: '/dashboard/inventory', icon: Package, label: 'Inventario' },
+    { to: '/dashboard/production', icon: Factory, label: 'Producción' },
+    { to: '/dashboard/payroll', icon: Users2, label: 'Nómina' },
+    { to: '/dashboard/finance', icon: DollarSign, label: 'Finanzas' },
+    { to: '/dashboard/reports', icon: BarChart3, label: 'Reportes' },
+    { to: '/dashboard/users', icon: Shield, label: 'Usuarios' },
+    { to: '/dashboard/settings', icon: Settings, label: 'Configuración' },
+  ];
+  if (userEmail === 'admin@chekadmin.com') {
+    items.push({ to: '/dashboard/superadmin', icon: Building2, label: 'SuperAdmin' });
+  }
+  return items;
+};
 
-export default function Sidebar() {
+export default function Sidebar({ onClose }) {
   const navigate = useNavigate();
   const user = JSON.parse(localStorage.getItem('user') || '{}');
   const [isDark, setIsDark] = useState(() => {
@@ -44,14 +50,21 @@ export default function Sidebar() {
     <aside className="glass-card w-72 min-h-screen flex flex-col p-5 sticky top-0 overflow-y-auto no-print"
            style={{ borderRadius: '0 1rem 1rem 0', minWidth: '280px' }}>
       {/* Logo */}
-      <div className="p-6">
-        <div className="flex items-center gap-3 relative mb-2">
-          <div className="w-10 h-10 flex items-center justify-center overflow-hidden flex-shrink-0 drop-shadow-sm">
-             <img src="/logo-icon-trans.png" alt="ChekAdmin Icon" className="w-full h-full object-contain" />
+      <div className="p-4 mb-2">
+        <div className="flex items-center justify-between relative mb-2">
+          <div className="flex items-center gap-3">
+             <div className="w-10 h-10 flex items-center justify-center overflow-hidden flex-shrink-0 drop-shadow-sm">
+                <img src="/logo-icon-trans.png" alt="ChekAdmin Icon" className="w-full h-full object-contain" />
+             </div>
+             <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
+               ChekAdmin
+             </h1>
           </div>
-          <h1 className="text-2xl font-black tracking-tight bg-gradient-to-r from-primary-400 to-primary-600 bg-clip-text text-transparent">
-            ChekAdmin
-          </h1>
+          {onClose && (
+            <button onClick={onClose} className="md:hidden text-gray-500 hover:text-gray-700 p-1">
+              <X size={20} />
+            </button>
+          )}
         </div>
         <p className="text-[10px] font-bold tracking-widest text-gray-500 uppercase mt-1 pl-1">ERP Industrial</p>
       </div>
@@ -69,7 +82,7 @@ export default function Sidebar() {
 
       {/* Navigation */}
       <nav className="flex-1 flex flex-col gap-1">
-        {navItems.map((item) => (
+        {getNavItems(user.email).map((item) => (
           <NavLink
             key={item.to}
             to={item.to}
