@@ -57,8 +57,8 @@ export default function LoginPage() {
         <div className="p-10 flex flex-col justify-center"
              style={{ background: 'linear-gradient(135deg, #1e1b4b, #312e81)', color: 'white' }}>
           <div className="mb-2">
-            <div className="bg-white rounded-2xl shadow-xl p-4 mb-6 inline-flex items-center justify-center border-4 border-white/10">
-               <img src="/logo-full.png" alt="ChekAdmin Logo" className="h-14 sm:h-16 w-auto object-contain" />
+            <div className="mb-8 flex justify-center lg:justify-start">
+               <img src="/logo-full-trans.png" alt="ChekAdmin Logo" className="h-24 sm:h-28 w-auto object-contain drop-shadow-2xl" />
             </div>
             <p className="text-xs tracking-[0.3em] text-indigo-200 mb-6 font-semibold">ERP INDUSTRIAL</p>
           </div>
