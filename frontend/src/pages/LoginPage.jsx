@@ -94,9 +94,10 @@ export default function LoginPage() {
             </div>
           </div>
         </div>
+      </div>
 
-        {/* Right - Form */}
-        <div className="p-12">
+      {/* Right - Form */}
+      <div className="p-12">
           {/* Logo Mobie/Title */}
           <div className="md:hidden flex flex-col items-center mb-6">
              <img src="/logo-icon-trans.png" alt="ChekAdmin" className="w-12 h-12 mb-2" />
