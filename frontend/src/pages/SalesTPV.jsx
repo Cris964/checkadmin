@@ -45,7 +45,7 @@ export default function SalesTPV() {
       if (historyFilters.end_date) hParams.end_date = historyFilters.end_date;
       if (historyFilters.user_id) hParams.user_id = historyFilters.user_id;
 
-      const [shiftRes, productsRes, summaryRes, colRes, salesRes, usersRes] = await Promise.all([
+      const results = await Promise.allSettled([
         api.get('/cash-shifts/current'),
         api.get('/products'),
         api.get('/sales/today-summary'),
@@ -53,12 +53,13 @@ export default function SalesTPV() {
         api.get('/sales', { params: hParams }),
         api.get('/users/company')
       ]);
-      setShift(shiftRes.data);
-      setProducts(productsRes.data);
-      setSummary(summaryRes.data);
-      setColombianData(colRes.data);
-      setSalesHistory(salesRes.data);
-      setUsers(usersRes.data);
+
+      if (results[0].status === 'fulfilled') setShift(results[0].value.data);
+      if (results[1].status === 'fulfilled') setProducts(results[1].value.data);
+      if (results[2].status === 'fulfilled') setSummary(results[2].value.data);
+      if (results[3].status === 'fulfilled') setColombianData(results[3].value.data);
+      if (results[4].status === 'fulfilled') setSalesHistory(results[4].value.data);
+      if (results[5].status === 'fulfilled') setUsers(results[5].value.data);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
@@ -272,7 +273,7 @@ export default function SalesTPV() {
         <button onClick={() => setMainTab('customers')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'customers' ? 'tab-active' : 'tab-inactive'}`}>Clientes</button>
       </div>
 
-      {mainTab === 'customers' ? (
+      {mainTab === 'customers' && (
         /* CUSTOMERS TAB */
         <div className="space-y-4">
           <div className="flex justify-between items-center">
@@ -344,8 +345,9 @@ export default function SalesTPV() {
             </div>
           )}
         </div>
-      ) : (
-        /* TPV TAB */
+      )}
+
+      {mainTab === 'tpv' && (
         <>
           {!shift ? (
             <div className="glass-card p-12 text-center max-w-md mx-auto">
