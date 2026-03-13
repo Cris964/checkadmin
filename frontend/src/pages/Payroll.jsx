@@ -9,22 +9,45 @@ export default function Payroll() {
   const [liquidations, setLiquidations] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [showLiquidate, setShowLiquidate] = useState(null);
-  const [form, setForm] = useState({ document: '', name: '', email: '', base_salary: '', start_date: '', eps: '', arl: '', pension: '', deduct_health: true, deduct_pension: true, deduct_arl: true });
-  const [liqForm, setLiqForm] = useState({ days_worked: '30', extra_hours: '0' });
+  const [colombianData, setColombianData] = useState({ eps: [], arl: [], pension: [], cesantias: [], contract_types: [] });
+  const [filters, setFilters] = useState({ start_date: '', end_date: '' });
+  const [form, setForm] = useState({ 
+    document: '', name: '', email: '', base_salary: '', start_date: '', 
+    eps: '', arl: '', pension: '', cesantias: '', contract_type: 'Término Indefinido',
+    deduct_health: true, deduct_pension: true, deduct_arl: true 
+  });
+  const [liqForm, setLiqForm] = useState({ days_worked: '30', extra_hours: '0', novedades_adicionales: '0', observaciones_novedades: '' });
   const [lastLiquidation, setLastLiquidation] = useState(null);
   const [showPayslip, setShowPayslip] = useState(false);
+  const [expandedLiquidation, setExpandedLiquidation] = useState(null);
   const payslipRef = useRef();
 
   const loadData = async () => {
-    const [e, l] = await Promise.all([api.get('/employees'), api.get('/payroll')]);
-    setEmployees(e.data); setLiquidations(l.data);
+    const params = {};
+    if (filters.start_date) params.start_date = filters.start_date;
+    if (filters.end_date) params.end_date = filters.end_date;
+
+    const [e, l, c] = await Promise.all([
+      api.get('/employees'), 
+      api.get('/payroll', { params }),
+      api.get('/constants/colombian-data')
+    ]);
+    setEmployees(e.data); 
+    setLiquidations(l.data);
+    setColombianData(c.data);
   };
-  useEffect(() => { loadData(); }, []);
+  useEffect(() => { loadData(); }, [filters]);
 
   const createEmployee = async (e) => {
     e.preventDefault();
     await api.post('/employees', { ...form, base_salary: parseFloat(form.base_salary) });
-    setShowForm(false); setForm({ document: '', name: '', email: '', base_salary: '', start_date: '', eps: '', arl: '', pension: '', deduct_health: true, deduct_pension: true, deduct_arl: true }); loadData();
+    setShowForm(false); 
+    setForm({ 
+      document: '', name: '', email: '', base_salary: '', start_date: '', 
+      eps: '', arl: '', pension: '', cesantias: '', contract_type: 'Término Indefinido',
+      deduct_health: true, deduct_pension: true, deduct_arl: true 
+    }); 
+    loadData();
   };
 
   const deleteEmployee = async (id) => {
@@ -35,10 +58,16 @@ export default function Payroll() {
   const liquidate = async () => {
     if (!showLiquidate) return;
     try {
-      const res = await api.post('/payroll/liquidate', { employee_id: showLiquidate.id, days_worked: parseInt(liqForm.days_worked), extra_hours: parseInt(liqForm.extra_hours) });
+      const res = await api.post('/payroll/liquidate', { 
+        employee_id: showLiquidate.id, 
+        days_worked: parseInt(liqForm.days_worked), 
+        extra_hours: parseInt(liqForm.extra_hours),
+        novedades_adicionales: parseFloat(liqForm.novedades_adicionales) || 0,
+        observaciones_novedades: liqForm.observaciones_novedades
+      });
       setLastLiquidation({ ...res.data, employee: showLiquidate });
       setShowLiquidate(null);
-      setLiqForm({ days_worked: '30', extra_hours: '0' });
+      setLiqForm({ days_worked: '30', extra_hours: '0', novedades_adicionales: '0', observaciones_novedades: '' });
       setShowPayslip(true);
       loadData();
     } catch (e) { toast.error(e.response?.data?.detail || 'Error al liquidar'); }
@@ -130,9 +159,21 @@ export default function Payroll() {
       )}
 
       {tab === 'liquidations' && (
-        <div className="glass-card overflow-hidden">
-          {liquidations.length === 0 ? <p className="text-gray-400 text-center py-12">No hay liquidaciones</p> : liquidations.map((l) => (
-            <div key={l.id} className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+        <div className="space-y-4">
+          <div className="glass-card p-4 flex gap-4 items-end">
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-1">DESDE</label>
+              <input type="date" value={filters.start_date} onChange={(e) => setFilters({...filters, start_date: e.target.value})} className="text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-1">HASTA</label>
+              <input type="date" value={filters.end_date} onChange={(e) => setFilters({...filters, end_date: e.target.value})} className="text-sm" />
+            </div>
+            <button onClick={() => setFilters({start_date: '', end_date: ''})} className="btn-outline py-2">Limpiar</button>
+          </div>
+          <div className="glass-card overflow-hidden">
+            {liquidations.length === 0 ? <p className="text-gray-400 text-center py-12">No hay liquidaciones</p> : liquidations.map((l) => (
+              <div key={l.id} className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer" onClick={() => setExpandedLiquidation(expandedLiquidation === l.id ? null : l.id)}>
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center text-white font-bold text-sm flex-shrink-0">
@@ -154,8 +195,27 @@ export default function Payroll() {
                 <div><span className="text-gray-400">Transporte:</span> <span className="font-semibold">{fmt(l.transport_subsidy)}</span></div>
                 <div><span className="text-gray-400">Deducciones:</span> <span className="font-semibold text-red-500">-{fmt(l.total_deductions)}</span></div>
               </div>
+              {expandedLiquidation === l.id && (
+                <div className="mt-4 pt-4 border-t border-gray-100 grid grid-cols-1 sm:grid-cols-2 gap-6 animate-slide-down">
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Detalle Prestacional (Empresa)</h4>
+                    <ul className="space-y-1 text-sm text-gray-600">
+                      <li className="flex justify-between"><span>Salud (8.5%):</span> <span>{fmt(l.employer_health)}</span></li>
+                      <li className="flex justify-between"><span>Pensión (12%):</span> <span>{fmt(l.employer_pension)}</span></li>
+                      <li className="flex justify-between"><span>ARL (0.522%):</span> <span>{fmt(l.employer_arl)}</span></li>
+                      <li className="flex justify-between font-bold text-gray-800 pt-1 border-t"><span>Subtotal Cargas:</span> <span>{fmt(l.employer_health + l.employer_pension + l.employer_arl)}</span></li>
+                    </ul>
+                  </div>
+                  <div>
+                    <h4 className="text-xs font-bold text-gray-400 uppercase tracking-wider mb-2">Novedades y Ajustes</h4>
+                    <p className="text-sm font-semibold text-gray-800">Monto: <span className={l.novedades_adicionales >= 0 ? "text-green-600" : "text-red-600"}>{fmt(l.novedades_adicionales)}</span></p>
+                    <p className="text-xs text-gray-500 mt-1">{l.observaciones_novedades || 'Sin observaciones'}</p>
+                  </div>
+                </div>
+              )}
             </div>
           ))}
+          </div>
         </div>
       )}
 
@@ -173,11 +233,46 @@ export default function Payroll() {
                 <div><label className="block text-sm font-semibold mb-1">Email</label><input type="email" value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })} /></div>
                 <div><label className="block text-sm font-semibold mb-1">Salario Base Mensual</label><input type="number" value={form.base_salary} onChange={(e) => setForm({ ...form, base_salary: e.target.value })} required /></div>
               </div>
-              <div><label className="block text-sm font-semibold mb-1">Fecha Inicio</label><input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} required /></div>
-              <div className="grid grid-cols-3 gap-3">
-                <div><label className="block text-sm font-semibold mb-1">EPS</label><input value={form.eps} onChange={(e) => setForm({ ...form, eps: e.target.value })} required /></div>
-                <div><label className="block text-sm font-semibold mb-1">ARL</label><input value={form.arl} onChange={(e) => setForm({ ...form, arl: e.target.value })} required /></div>
-                <div><label className="block text-sm font-semibold mb-1">Pensión</label><input value={form.pension} onChange={(e) => setForm({ ...form, pension: e.target.value })} required /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Tipo de Contrato</label>
+                  <select value={form.contract_type} onChange={(e) => setForm({ ...form, contract_type: e.target.value })} required className="w-full">
+                    {colombianData.contract_types.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div><label className="block text-sm font-semibold mb-1">Fecha Inicio</label><input type="date" value={form.start_date} onChange={(e) => setForm({ ...form, start_date: e.target.value })} required /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold mb-1">EPS</label>
+                  <select value={form.eps} onChange={(e) => setForm({ ...form, eps: e.target.value })} required className="w-full">
+                    <option value="">Seleccione EPS</option>
+                    {colombianData.eps.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1">ARL</label>
+                  <select value={form.arl} onChange={(e) => setForm({ ...form, arl: e.target.value })} required className="w-full">
+                    <option value="">Seleccione ARL</option>
+                    {colombianData.arl.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Pensión</label>
+                  <select value={form.pension} onChange={(e) => setForm({ ...form, pension: e.target.value })} required className="w-full">
+                    <option value="">Seleccione Fondo</option>
+                    {colombianData.pension.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Cesantías</label>
+                  <select value={form.cesantias} onChange={(e) => setForm({ ...form, cesantias: e.target.value })} required className="w-full">
+                    <option value="">Seleccione Fondo</option>
+                    {colombianData.cesantias.map(t => <option key={t} value={t}>{t}</option>)}
+                  </select>
+                </div>
               </div>
               <button type="submit" className="btn-primary w-full justify-center py-2.5">Vincular Empleado</button>
             </form>
@@ -199,8 +294,14 @@ export default function Payroll() {
               </div>
             </div>
             <div className="space-y-3">
-              <div><label className="block text-sm font-semibold mb-1">Días Trabajados</label><input type="number" value={liqForm.days_worked} onChange={(e) => setLiqForm({ ...liqForm, days_worked: e.target.value })} /></div>
-              <div><label className="block text-sm font-semibold mb-1">Horas Extra</label><input type="number" value={liqForm.extra_hours} onChange={(e) => setLiqForm({ ...liqForm, extra_hours: e.target.value })} /></div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-sm font-semibold mb-1">Días Trabajados</label><input type="number" value={liqForm.days_worked} onChange={(e) => setLiqForm({ ...liqForm, days_worked: e.target.value })} /></div>
+                <div><label className="block text-sm font-semibold mb-1">Horas Extra</label><input type="number" value={liqForm.extra_hours} onChange={(e) => setLiqForm({ ...liqForm, extra_hours: e.target.value })} /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div><label className="block text-sm font-semibold mb-1">Novedades (+/-)</label><input type="number" value={liqForm.novedades_adicionales} onChange={(e) => setLiqForm({ ...liqForm, novedades_adicionales: e.target.value })} placeholder="Ej: 50000 o -20000" /></div>
+                <div><label className="block text-sm font-semibold mb-1">Observaciones</label><input value={liqForm.observaciones_novedades} onChange={(e) => setLiqForm({ ...liqForm, observaciones_novedades: e.target.value })} placeholder="Bono, descuento, etc." /></div>
+              </div>
             </div>
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowLiquidate(null)} className="flex-1 py-2.5 border border-gray-200 rounded-lg font-medium hover:bg-gray-50 transition-colors">Cancelar</button>
@@ -231,6 +332,7 @@ export default function Payroll() {
                   <tr style={{ borderBottom: '1px solid #eee' }}><td style={{ padding: '6px', fontSize: '11px' }}>Salario base</td><td style={{ textAlign: 'right', padding: '6px', fontWeight: '600', fontSize: '11px' }}>{fmt(lastLiquidation.base_salary)}</td></tr>
                   <tr style={{ borderBottom: '1px solid #eee' }}><td style={{ padding: '6px', fontSize: '11px' }}>Horas extra ({lastLiquidation.extra_hours})</td><td style={{ textAlign: 'right', padding: '6px', fontWeight: '600', fontSize: '11px' }}>{fmt(lastLiquidation.extra_hours_pay)}</td></tr>
                   <tr style={{ borderBottom: '1px solid #eee' }}><td style={{ padding: '6px', fontSize: '11px' }}>Subsidio transporte</td><td style={{ textAlign: 'right', padding: '6px', fontWeight: '600', fontSize: '11px' }}>{fmt(lastLiquidation.transport_subsidy)}</td></tr>
+                  <tr style={{ borderBottom: '1px solid #eee' }}><td style={{ padding: '6px', fontSize: '11px' }}>Novedades</td><td style={{ textAlign: 'right', padding: '6px', fontWeight: '600', fontSize: '11px', color: lastLiquidation.novedades_adicionales >= 0 ? '#16a34a' : '#dc2626' }}>{fmt(lastLiquidation.novedades_adicionales)}</td></tr>
                   <tr style={{ borderBottom: '1px solid #eee' }}><td style={{ padding: '6px', fontSize: '11px', color: '#dc2626' }}>Salud (4%)</td><td style={{ textAlign: 'right', padding: '6px', fontWeight: '600', fontSize: '11px', color: '#dc2626' }}>-{fmt(lastLiquidation.health_deduction)}</td></tr>
                   <tr style={{ borderBottom: '1px solid #eee' }}><td style={{ padding: '6px', fontSize: '11px', color: '#dc2626' }}>Pensión (4%)</td><td style={{ textAlign: 'right', padding: '6px', fontWeight: '600', fontSize: '11px', color: '#dc2626' }}>-{fmt(lastLiquidation.pension_deduction)}</td></tr>
                   <tr style={{ borderBottom: '1px solid #eee' }}><td style={{ padding: '6px', fontSize: '11px', color: '#dc2626' }}>ARL (0.522%)</td><td style={{ textAlign: 'right', padding: '6px', fontWeight: '600', fontSize: '11px', color: '#dc2626' }}>-{fmt(lastLiquidation.arl_deduction)}</td></tr>

@@ -330,6 +330,8 @@ class Sale(BaseModel):
     change: Optional[float] = None
     requires_invoice: bool = False
     customer_email: Optional[str] = None
+    payment_details: Optional[dict] = None # {type: "debito/credito", franchise: "visa...", bank: "...", voucher_number: "..."}
+    voucher_history: List[dict] = Field(default_factory=list) # Audit logs for voucher edits
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class SaleItem(BaseModel):
@@ -345,6 +347,11 @@ class SaleCreate(BaseModel):
     amount_paid: Optional[float] = None
     requires_invoice: bool = False
     customer_email: Optional[str] = None
+    payment_details: Optional[dict] = None # {type, franchise, bank, voucher_number}
+
+class SaleVoucherUpdate(BaseModel):
+    voucher_number: str
+    user_name: str # For audit log
 
 class Employee(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -359,6 +366,8 @@ class Employee(BaseModel):
     eps: str
     arl: str
     pension: str
+    cesantias: Optional[str] = None
+    contract_type: str = "Término Indefinido" # Término Indefinido, Término Fijo, Obra o Labor, Aprendizaje
     deduct_health: bool = True
     deduct_pension: bool = True
     deduct_arl: bool = True
@@ -374,6 +383,8 @@ class EmployeeCreate(BaseModel):
     eps: str
     arl: str
     pension: str
+    cesantias: Optional[str] = None
+    contract_type: str = "Término Indefinido"
     deduct_health: bool = True
     deduct_pension: bool = True
     deduct_arl: bool = True
@@ -399,12 +410,16 @@ class PayrollLiquidation(BaseModel):
     employer_pension: float
     employer_arl: float
     employer_total_cost: float
+    novedades_adicionales: float = 0.0
+    observaciones_novedades: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class PayrollLiquidationCreate(BaseModel):
     employee_id: str
     days_worked: int
     extra_hours: int = 0
+    novedades_adicionales: float = 0.0
+    observaciones_novedades: Optional[str] = None
 
 class Transaction(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -965,12 +980,57 @@ async def close_cash_shift(shift_id: str, current_user: dict = Depends(get_curre
 # ==================== SALES ====================
 
 @api_router.get("/sales", response_model=List[Sale])
-async def get_sales(current_user: dict = Depends(get_current_user)):
-    sales = await db.sales.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+async def get_sales(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    user_id: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {"company_id": current_user["company_id"]}
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" not in query: query["created_at"] = {}
+        query["created_at"]["$lte"] = end_date + "T23:59:59"
+    if user_id:
+        query["user_id"] = user_id
+        
+    sales = await db.sales.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     for s in sales:
         if isinstance(s['created_at'], str):
             s['created_at'] = datetime.fromisoformat(s['created_at'])
     return sales
+
+@api_router.put("/sales/{sale_id}/voucher")
+async def update_sale_voucher(
+    sale_id: str, 
+    update: SaleVoucherUpdate, 
+    current_user: dict = Depends(get_current_user)
+):
+    sale = await db.sales.find_one({"id": sale_id, "company_id": current_user["company_id"]})
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+    
+    payment_details = sale.get('payment_details') or {}
+    old_voucher = payment_details.get('voucher_number', 'N/A')
+    payment_details['voucher_number'] = update.voucher_number
+    
+    log_entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "user": update.user_name,
+        "action": "voucher_update",
+        "old_value": old_voucher,
+        "new_value": update.voucher_number
+    }
+    
+    await db.sales.update_one(
+        {"id": sale_id},
+        {
+            "$set": {"payment_details": payment_details},
+            "$push": {"voucher_history": log_entry}
+        }
+    )
+    return {"message": "Voucher updated successfully", "history": log_entry}
 
 @api_router.post("/sales", response_model=Sale)
 async def create_sale(sale_data: SaleCreate, current_user: dict = Depends(get_current_user)):
@@ -1034,6 +1094,25 @@ async def create_sale(sale_data: SaleCreate, current_user: dict = Depends(get_cu
     return sale
 
 # ==================== EMPLOYEES ====================
+
+@api_router.get("/payroll", response_model=List[PayrollLiquidation])
+async def get_payroll(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_user: dict = Depends(get_current_user)
+):
+    query = {"company_id": current_user["company_id"]}
+    if start_date:
+        query["created_at"] = {"$gte": start_date}
+    if end_date:
+        if "created_at" not in query: query["created_at"] = {}
+        query["created_at"]["$lte"] = end_date + "T23:59:59"
+        
+    payroll = await db.payroll.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    for p in payroll:
+        if isinstance(p['created_at'], str):
+            p['created_at'] = datetime.fromisoformat(p['created_at'])
+    return payroll
 
 @api_router.get("/employees", response_model=List[Employee])
 async def get_employees(current_user: dict = Depends(get_current_user)):
@@ -1111,11 +1190,11 @@ async def liquidate_payroll(liquidation_data: PayrollLiquidationCreate, current_
     hour_rate = employee['daily_rate'] / 8  # Assuming 8 hour workday
     extra_hours_pay = liquidation_data.extra_hours * hour_rate * 1.25
     
-    # Transport subsidy - Colombia 2026: $200,000 COP
+    # Transport subsidy - Colombia 2026: $249,095 COP
     # Only applies if monthly base salary is <= 3,501,810 COP (2x minimum wage)
     monthly_base_salary = employee.get('base_salary', employee['daily_rate'] * 30)
     TRANSPORT_SUBSIDY_THRESHOLD = 3501810.0
-    TRANSPORT_SUBSIDY_AMOUNT = 200000.0
+    TRANSPORT_SUBSIDY_AMOUNT = 249095.0
     transport_subsidy = TRANSPORT_SUBSIDY_AMOUNT if monthly_base_salary <= TRANSPORT_SUBSIDY_THRESHOLD else 0.0
     
     # Calculate employee deductions (on base + extra hours)
@@ -1126,7 +1205,7 @@ async def liquidate_payroll(liquidation_data: PayrollLiquidationCreate, current_
     total_deductions = health_deduction + pension_deduction + arl_deduction
     
     # Net salary
-    net_salary = total_salary_base + transport_subsidy - total_deductions
+    net_salary = total_salary_base + transport_subsidy - total_deductions + liquidation_data.novedades_adicionales
     
     # Calculate employer contributions (for admin view)
     employer_health = total_salary_base * 0.085  # 8.5% employer health
@@ -1152,7 +1231,9 @@ async def liquidate_payroll(liquidation_data: PayrollLiquidationCreate, current_
         employer_health=employer_health,
         employer_pension=employer_pension,
         employer_arl=employer_arl,
-        employer_total_cost=employer_total_cost
+        employer_total_cost=employer_total_cost,
+        novedades_adicionales=liquidation_data.novedades_adicionales,
+        observaciones_novedades=liquidation_data.observaciones_novedades
     )
     liquidation_dict = liquidation.model_dump()
     liquidation_dict['created_at'] = liquidation_dict['created_at'].isoformat()
@@ -1422,6 +1503,21 @@ async def create_company_user(user_data: UserCreateByAdmin, admin_user: dict = D
     await db.users.insert_one(user_dict)
     
     return new_user
+
+# ==================== SETTINGS & CONSTANTS ====================
+
+COLOMBIAN_DATA = {
+    "eps": ["Sura", "Sanitas", "Salud Total", "Nueva EPS", "Compensar", "Coosalud", "Mutual Ser", "Famisanar", "Savia Salud"],
+    "arl": ["Sura", "Bolivar", "Positiva", "Colpatria", "Liberty", "Aurora", "Equidad"],
+    "pension": ["Proteccion", "Porvenir", "Colfondos", "Skandia", "Colpensiones"],
+    "cesantias": ["Proteccion", "Porvenir", "Colfondos", "Skandia", "FNA"],
+    "contract_types": ["Término Indefinido", "Término Fijo", "Obra o Labor", "Aprendizaje", "Prestación de Servicios"],
+    "banks": ["Bancolombia", "Nequi", "Daviplata", "Davivienda", "Banco de Bogotá", "BBVA", "Banco Occidente", "Banco Popular", "Scotiabank Colpatria", "Itaú", "Sudameris", "Caja Social"]
+}
+
+@api_router.get("/constants/colombian-data")
+async def get_colombian_data(current_user: dict = Depends(get_current_user)):
+    return COLOMBIAN_DATA
 
 @api_router.put("/users/company/{user_id}", response_model=User)
 async def update_company_user(user_id: str, update_data: UserUpdateByAdmin, admin_user: dict = Depends(require_admin)):

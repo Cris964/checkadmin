@@ -22,6 +22,12 @@ export default function SalesTPV() {
   const [showInvoice, setShowInvoice] = useState(false);
   const [customerEmail, setCustomerEmail] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
+  const [colombianData, setColombianData] = useState({ banks: [] });
+  const [paymentDetails, setPaymentDetails] = useState({ type: 'debito', franchise: '', bank: '', voucher_number: '' });
+  const [salesHistory, setSalesHistory] = useState([]);
+  const [historyFilters, setHistoryFilters] = useState({ start_date: '', end_date: '', user_id: '' });
+  const [users, setUsers] = useState([]);
+  const [editingVoucher, setEditingVoucher] = useState(null);
 
   // Customers
   const [customers, setCustomers] = useState([]);
@@ -34,17 +40,29 @@ export default function SalesTPV() {
 
   const loadData = async () => {
     try {
-      const [shiftRes, productsRes, summaryRes] = await Promise.all([
+      const hParams = {};
+      if (historyFilters.start_date) hParams.start_date = historyFilters.start_date;
+      if (historyFilters.end_date) hParams.end_date = historyFilters.end_date;
+      if (historyFilters.user_id) hParams.user_id = historyFilters.user_id;
+
+      const [shiftRes, productsRes, summaryRes, colRes, salesRes, usersRes] = await Promise.all([
         api.get('/cash-shifts/current'),
         api.get('/products'),
         api.get('/sales/today-summary'),
+        api.get('/constants/colombian-data'),
+        api.get('/sales', { params: hParams }),
+        api.get('/users/company')
       ]);
       setShift(shiftRes.data);
       setProducts(productsRes.data);
       setSummary(summaryRes.data);
+      setColombianData(colRes.data);
+      setSalesHistory(salesRes.data);
+      setUsers(usersRes.data);
     } catch (e) { console.error(e); }
     setLoading(false);
   };
+  useEffect(() => { loadData(); }, [historyFilters]);
 
   const loadCustomers = async () => {
     try {
@@ -130,13 +148,15 @@ export default function SalesTPV() {
         amount_paid: paymentMethod === 'efectivo' ? parseFloat(amountPaid) || cartTotal : cartTotal,
         requires_invoice: !!customerEmail,
         customer_email: customerEmail || null,
+        payment_details: ['tarjeta', 'transferencia'].includes(paymentMethod) ? paymentDetails : null
       };
       await api.post('/sales', saleData);
       setLastSale({
         items: [...cart],
         total: cartTotal,
         payment_method: paymentMethod,
-        amount_paid: paymentMethod === 'efectivo' ? parseFloat(amountPaid) || cartTotal : cartTotal,
+        payment_details: saleData.payment_details,
+        amount_paid: saleData.amount_paid,
         change: paymentMethod === 'efectivo' ? (parseFloat(amountPaid) || cartTotal) - cartTotal : 0,
         date: new Date().toLocaleString('es-CO'),
         customer_email: customerEmail,
@@ -145,6 +165,7 @@ export default function SalesTPV() {
       setShowPayment(false);
       setAmountPaid('');
       setCustomerEmail('');
+      setPaymentDetails({ type: 'debito', franchise: '', bank: '', voucher_number: '' });
       setShowInvoice(true);
       loadData();
       toast.success('¡Venta completada con éxito!');
@@ -247,6 +268,7 @@ export default function SalesTPV() {
       {/* Main Tabs */}
       <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
         <button onClick={() => setMainTab('tpv')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'tpv' ? 'tab-active' : 'tab-inactive'}`}>Punto de Venta</button>
+        <button onClick={() => setMainTab('history')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'history' ? 'tab-active' : 'tab-inactive'}`}>Historial de Ventas</button>
         <button onClick={() => setMainTab('customers')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'customers' ? 'tab-active' : 'tab-inactive'}`}>Clientes</button>
       </div>
 
@@ -438,10 +460,52 @@ export default function SalesTPV() {
               </div>
               {paymentMethod === 'efectivo' && (
                 <>
-                  <label className="block text-sm font-semibold mt-3">Monto Recibido</label>
-                  <input type="number" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} placeholder="$0" />
-                  {amountPaid && change >= 0 && <p className="text-green-600 font-bold text-center">Cambio: {fmt(change)}</p>}
+                   <label className="block text-sm font-semibold mt-3">Monto Recibido</label>
+                   <input type="number" value={amountPaid} onChange={(e) => setAmountPaid(e.target.value)} placeholder="$0" />
+                   {amountPaid && change >= 0 && <p className="text-green-600 font-bold text-center">Cambio: {fmt(change)}</p>}
                 </>
+              )}
+              {paymentMethod === 'tarjeta' && (
+                <div className="space-y-3 pt-3 p-3 bg-gray-50 rounded-lg">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase">Tipo</label>
+                      <select value={paymentDetails.type} onChange={(e) => setPaymentDetails({...paymentDetails, type: e.target.value})} className="w-full text-sm">
+                        <option value="debito">Débito</option>
+                        <option value="credito">Crédito</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-xs font-bold text-gray-400 uppercase">Franquicia</label>
+                      <select value={paymentDetails.franchise} onChange={(e) => setPaymentDetails({...paymentDetails, franchise: e.target.value})} className="w-full text-sm">
+                        <option value="">Seleccione...</option>
+                        <option value="visa">Visa</option>
+                        <option value="mastercard">Mastercard</option>
+                        <option value="amex">Amex</option>
+                        <option value="otra">Otra</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase"># Comprobante Datafono</label>
+                    <input value={paymentDetails.voucher_number} onChange={(e) => setPaymentDetails({...paymentDetails, voucher_number: e.target.value})} placeholder="000000" className="text-sm" />
+                  </div>
+                </div>
+              )}
+              {paymentMethod === 'transferencia' && (
+                <div className="space-y-3 pt-3 p-3 bg-gray-50 rounded-lg">
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase">Banco de Origen</label>
+                    <select value={paymentDetails.bank} onChange={(e) => setPaymentDetails({...paymentDetails, bank: e.target.value})} className="w-full text-sm">
+                      <option value="">Seleccione Banco...</option>
+                      {colombianData.banks.map(b => <option key={b} value={b}>{b}</option>)}
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-gray-400 uppercase"># Comprobante / Referencia</label>
+                    <input value={paymentDetails.voucher_number} onChange={(e) => setPaymentDetails({...paymentDetails, voucher_number: e.target.value})} placeholder="000000" className="text-sm" />
+                  </div>
+                </div>
               )}
               <div className="pt-2">
                 <label className="block text-sm font-semibold mb-1">Correo del cliente (opcional — para factura)</label>
@@ -469,6 +533,69 @@ export default function SalesTPV() {
       )}
 
       {/* Invoice Modal */}
+      {mainTab === 'history' && (
+        <div className="space-y-4">
+          <div className="glass-card p-4 grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-1">DESDE</label>
+              <input type="date" value={historyFilters.start_date} onChange={(e) => setHistoryFilters({...historyFilters, start_date: e.target.value})} className="text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-1">HASTA</label>
+              <input type="date" value={historyFilters.end_date} onChange={(e) => setHistoryFilters({...historyFilters, end_date: e.target.value})} className="text-sm" />
+            </div>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-1">VENDEDOR</label>
+              <select value={historyFilters.user_id} onChange={(e) => setHistoryFilters({...historyFilters, user_id: e.target.value})} className="text-sm w-full">
+                <option value="">Todos</option>
+                {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
+              </select>
+            </div>
+            <button onClick={() => setHistoryFilters({start_date: '', end_date: '', user_id: ''})} className="btn-outline py-2">Limpiar</button>
+          </div>
+          <div className="glass-card overflow-hidden">
+            {salesHistory.length === 0 ? <p className="text-gray-400 text-center py-12">No hay ventas en este periodo</p> : salesHistory.map((s) => (
+              <div key={s.id} className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <p className="font-bold text-gray-800">Venta #{s.id.slice(0,8).toUpperCase()}</p>
+                    <p className="text-xs text-gray-400">{new Date(s.created_at).toLocaleString('es-CO')} · {s.payment_method.toUpperCase()}</p>
+                    {s.payment_details && (
+                      <p className="text-xs text-indigo-600 font-semibold mt-1">
+                        {s.payment_details.type} {s.payment_details.franchise} {s.payment_details.bank} · 
+                        Voucher: {editingVoucher?.id === s.id ? (
+                          <input 
+                            autoFocus
+                            value={editingVoucher.value} 
+                            onChange={(e) => setEditingVoucher({...editingVoucher, value: e.target.value})}
+                            onBlur={async () => {
+                              if (editingVoucher.value !== s.payment_details.voucher_number) {
+                                try {
+                                  await api.put(`/sales/${s.id}/voucher`, { voucher_number: editingVoucher.value, user_name: shift?.user_name || 'Admin' });
+                                  toast.success('Comprobante actualizado');
+                                  loadData();
+                                } catch (e) { toast.error('Error al actualizar'); }
+                              }
+                              setEditingVoucher(null);
+                            }}
+                            className="inline-block w-24 px-1 py-0 h-5"
+                          />
+                        ) : (
+                          <span onClick={() => setEditingVoucher({id: s.id, value: s.payment_details.voucher_number})} className="underline cursor-pointer">{s.payment_details.voucher_number || 'N/A'}</span>
+                        )}
+                      </p>
+                    )}
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-primary-600">{fmt(s.total)}</p>
+                    <p className="text-xs text-gray-400">Items: {s.items?.length || 0}</p>
+                  </div>
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
       {showInvoice && lastSale && (
         <div className="modal-overlay" onClick={() => setShowInvoice(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '28rem' }}>
