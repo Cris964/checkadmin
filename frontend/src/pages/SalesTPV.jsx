@@ -22,7 +22,9 @@ export default function SalesTPV() {
   const [showInvoice, setShowInvoice] = useState(false);
   const [customerEmail, setCustomerEmail] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
-  const [colombianData, setColombianData] = useState({ banks: [] });
+  const [colombianData, setColombianData] = useState({ 
+    banks: ["Bancolombia", "Davivienda", "Banco de Bogotá", "Banco de Occidente", "BBVA", "Scotiabank Colpatria", "Banco Caja Social", "Banco Agrario", "Banco AV Villas", "Nequi", "Daviplata", "OTRO"] 
+  });
   const [paymentDetails, setPaymentDetails] = useState({ type: 'debito', franchise: '', bank: '', voucher_number: '' });
   const [salesHistory, setSalesHistory] = useState([]);
   const [historyFilters, setHistoryFilters] = useState({ start_date: '', end_date: '', user_id: '' });

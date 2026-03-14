@@ -9,7 +9,13 @@ export default function Payroll() {
   const [liquidations, setLiquidations] = useState([]);
   const [showForm, setShowForm] = useState(false);
   const [showLiquidate, setShowLiquidate] = useState(null);
-  const [colombianData, setColombianData] = useState({ eps: [], arl: [], pension: [], cesantias: [], contract_types: [] });
+  const [colombianData, setColombianData] = useState({ 
+    eps: ["Nueva", "Sura", "Sanitas", "Compensar", "Salud Total", "Famisanar", "Coosalud", "Savia Salud", "Asmet Salud", "Mutual Ser", "Emssanar", "Capital Salud", "OTRO"], 
+    arl: ["SURA", "Positiva", "Colmena", "AXA Colpatria", "Bolívar", "OTRO"], 
+    pension: ["Colpensiones", "Porvenir", "Protección", "Colfondos", "Skandia", "OTRO"], 
+    cesantias: ["Porvenir", "Protección", "Colfondos", "Skandia", "Fondo Nacional del Ahorro", "OTRO"], 
+    contract_types: ["Término indefinido", "Término fijo", "Obra o labor", "Aprendizaje", "Prestación de servicios"] 
+  });
   const [filters, setFilters] = useState({ start_date: '', end_date: '' });
   const [form, setForm] = useState({ 
     document: '', name: '', email: '', base_salary: '', start_date: '', 

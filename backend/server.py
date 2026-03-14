@@ -101,6 +101,22 @@ ACCESS_TOKEN_EXPIRE_MINUTES = 1440  # 24 hours
 MP_ACCESS_TOKEN = os.environ.get("MP_ACCESS_TOKEN", "TEST-YOUR-TOKEN-HERE")
 mp_sdk = mercadopago.SDK(MP_ACCESS_TOKEN)
 
+# ==================== SETTINGS & CONSTANTS ====================
+
+COLOMBIAN_DATA = {
+    "eps": ["Nueva", "Sura", "Sanitas", "Compensar", "Salud Total", "Famisanar", "Coosalud", "Savia Salud", "Asmet Salud", "Mutual Ser", "Emssanar", "Capital Salud", "OTRO"],
+    "arl": ["SURA", "Positiva", "Colmena", "AXA Colpatria", "Bolívar", "OTRO"],
+    "pension": ["Colpensiones", "Porvenir", "Protección", "Colfondos", "Skandia", "OTRO"],
+    "cesantias": ["Porvenir", "Protección", "Colfondos", "Skandia", "Fondo Nacional del Ahorro", "OTRO"],
+    "contract_types": ["Término indefinido", "Término fijo", "Obra o labor", "Aprendizaje", "Prestación de servicios"],
+    "banks": ["Bancolombia", "Davivienda", "Banco de Bogotá", "Banco de Occidente", "BBVA", "Scotiabank Colpatria", "Banco Caja Social", "Banco Agrario", "Banco AV Villas", "Nequi", "Daviplata", "OTRO"],
+    "account_types": ["Ahorros", "Corriente"]
+}
+
+@api_router.get("/constants/colombian-data")
+async def get_colombian_data():
+    return COLOMBIAN_DATA
+
 # ==================== MODELS ====================
 
 class Company(BaseModel):
@@ -1512,21 +1528,6 @@ async def create_company_user(user_data: UserCreateByAdmin, admin_user: dict = D
     
     return new_user
 
-# ==================== SETTINGS & CONSTANTS ====================
-
-COLOMBIAN_DATA = {
-    "eps": ["Nueva", "Sura", "Sanitas", "Compensar", "Salud Total", "Famisanar", "Coosalud", "Savia Salud", "Asmet Salud", "Mutual Ser", "Emssanar", "Capital Salud", "OTRO"],
-    "arl": ["SURA", "Positiva", "Colmena", "AXA Colpatria", "Bolívar", "OTRO"],
-    "pension": ["Colpensiones", "Porvenir", "Protección", "Colfondos", "Skandia", "OTRO"],
-    "cesantias": ["Porvenir", "Protección", "Colfondos", "Skandia", "Fondo Nacional del Ahorro", "OTRO"],
-    "contract_types": ["Término indefinido", "Término fijo", "Obra o labor", "Aprendizaje", "Prestación de servicios"],
-    "banks": ["Bancolombia", "Davivienda", "Banco de Bogotá", "Banco de Occidente", "BBVA", "Scotiabank Colpatria", "Banco Caja Social", "Banco Agrario", "Banco AV Villas", "Nequi", "Daviplata", "OTRO"],
-    "account_types": ["Ahorros", "Corriente"]
-}
-
-@api_router.get("/constants/colombian-data")
-async def get_colombian_data(current_user: dict = Depends(get_current_user)):
-    return COLOMBIAN_DATA
 
 @api_router.put("/users/company/{user_id}", response_model=User)
 async def update_company_user(user_id: str, update_data: UserUpdateByAdmin, admin_user: dict = Depends(require_admin)):
