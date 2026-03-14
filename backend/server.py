@@ -1186,7 +1186,7 @@ async def liquidate_payroll(liquidation_data: PayrollLiquidationCreate, current_
     # Calculate base salary
     base_salary = liquidation_data.days_worked * employee['daily_rate']
     
-    # Calculate extra hours (1.25x for regular extra hours, or 1.75x for night/holiday - using 1.25x)
+    # Calculate extra hours (1.25x for regular extra hours)
     hour_rate = employee['daily_rate'] / 8  # Assuming 8 hour workday
     extra_hours_pay = liquidation_data.extra_hours * hour_rate * 1.25
     
@@ -1207,11 +1207,19 @@ async def liquidate_payroll(liquidation_data: PayrollLiquidationCreate, current_
     # Net salary
     net_salary = total_salary_base + transport_subsidy - total_deductions + liquidation_data.novedades_adicionales
     
-    # Calculate employer contributions (for admin view)
+    # Calculate employer contributions (for admin view) - Colombia 2026
     employer_health = total_salary_base * 0.085  # 8.5% employer health
     employer_pension = total_salary_base * 0.12  # 12% employer pension
-    employer_arl = total_salary_base * 0.00522  # 0.522% employer ARL
-    employer_total_cost = total_salary_base + transport_subsidy + employer_health + employer_pension + employer_arl
+    employer_arl = total_salary_base * 0.00522  # 0.522% employer ARL (Risk I)
+    
+    # Parafiscales (9%)
+    parafiscales = total_salary_base * 0.09 # Caja 4% + ICBF 3% + SENA 2%
+    
+    # Prestaciones (approx 21.83%)
+    # Prima 8.33%, Cesantias 8.33%, Intereses 1%, Vacaciones 4.17%
+    prestaciones = total_salary_base * 0.2183
+    
+    employer_total_cost = total_salary_base + transport_subsidy + employer_health + employer_pension + employer_arl + parafiscales + prestaciones
     
     liquidation = PayrollLiquidation(
         company_id=current_user["company_id"],
@@ -1507,12 +1515,13 @@ async def create_company_user(user_data: UserCreateByAdmin, admin_user: dict = D
 # ==================== SETTINGS & CONSTANTS ====================
 
 COLOMBIAN_DATA = {
-    "eps": ["Sura", "Sanitas", "Salud Total", "Nueva EPS", "Compensar", "Coosalud", "Mutual Ser", "Famisanar", "Savia Salud"],
-    "arl": ["Sura", "Bolivar", "Positiva", "Colpatria", "Liberty", "Aurora", "Equidad"],
-    "pension": ["Proteccion", "Porvenir", "Colfondos", "Skandia", "Colpensiones"],
-    "cesantias": ["Proteccion", "Porvenir", "Colfondos", "Skandia", "FNA"],
-    "contract_types": ["Término Indefinido", "Término Fijo", "Obra o Labor", "Aprendizaje", "Prestación de Servicios"],
-    "banks": ["Bancolombia", "Nequi", "Daviplata", "Davivienda", "Banco de Bogotá", "BBVA", "Banco Occidente", "Banco Popular", "Scotiabank Colpatria", "Itaú", "Sudameris", "Caja Social"]
+    "eps": ["Nueva", "Sura", "Sanitas", "Compensar", "Salud Total", "Famisanar", "Coosalud", "Savia Salud", "Asmet Salud", "Mutual Ser", "Emssanar", "Capital Salud", "OTRO"],
+    "arl": ["SURA", "Positiva", "Colmena", "AXA Colpatria", "Bolívar", "OTRO"],
+    "pension": ["Colpensiones", "Porvenir", "Protección", "Colfondos", "Skandia", "OTRO"],
+    "cesantias": ["Porvenir", "Protección", "Colfondos", "Skandia", "Fondo Nacional del Ahorro", "OTRO"],
+    "contract_types": ["Término indefinido", "Término fijo", "Obra o labor", "Aprendizaje", "Prestación de servicios"],
+    "banks": ["Bancolombia", "Davivienda", "Banco de Bogotá", "Banco de Occidente", "BBVA", "Scotiabank Colpatria", "Banco Caja Social", "Banco Agrario", "Banco AV Villas", "Nequi", "Daviplata", "OTRO"],
+    "account_types": ["Ahorros", "Corriente"]
 }
 
 @api_router.get("/constants/colombian-data")

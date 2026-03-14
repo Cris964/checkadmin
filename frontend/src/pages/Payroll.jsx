@@ -13,9 +13,10 @@ export default function Payroll() {
   const [filters, setFilters] = useState({ start_date: '', end_date: '' });
   const [form, setForm] = useState({ 
     document: '', name: '', email: '', base_salary: '', start_date: '', 
-    eps: '', arl: '', pension: '', cesantias: '', contract_type: 'Término Indefinido',
+    eps: '', arl: '', pension: '', cesantias: '', contract_type: 'Término indefinido',
     deduct_health: true, deduct_pension: true, deduct_arl: true 
   });
+  const [customNames, setCustomNames] = useState({ eps: '', arl: '', pension: '', cesantias: '' });
   const [liqForm, setLiqForm] = useState({ days_worked: '30', extra_hours: '0', novedades_adicionales: '0', observaciones_novedades: '' });
   const [lastLiquidation, setLastLiquidation] = useState(null);
   const [showPayslip, setShowPayslip] = useState(false);
@@ -40,13 +41,20 @@ export default function Payroll() {
 
   const createEmployee = async (e) => {
     e.preventDefault();
-    await api.post('/employees', { ...form, base_salary: parseFloat(form.base_salary) });
+    const finalForm = { ...form };
+    if (form.eps === 'OTRO') finalForm.eps = customNames.eps;
+    if (form.arl === 'OTRO') finalForm.arl = customNames.arl;
+    if (form.pension === 'OTRO') finalForm.pension = customNames.pension;
+    if (form.cesantias === 'OTRO') finalForm.cesantias = customNames.cesantias;
+
+    await api.post('/employees', { ...finalForm, base_salary: parseFloat(form.base_salary) });
     setShowForm(false); 
     setForm({ 
       document: '', name: '', email: '', base_salary: '', start_date: '', 
-      eps: '', arl: '', pension: '', cesantias: '', contract_type: 'Término Indefinido',
+      eps: '', arl: '', pension: '', cesantias: '', contract_type: 'Término indefinido',
       deduct_health: true, deduct_pension: true, deduct_arl: true 
     }); 
+    setCustomNames({ eps: '', arl: '', pension: '', cesantias: '' });
     loadData();
   };
 
@@ -249,6 +257,7 @@ export default function Payroll() {
                     <option value="">Seleccione EPS</option>
                     {colombianData.eps.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+                  {form.eps === 'OTRO' && <input className="mt-1" placeholder="Nombre EPS" value={customNames.eps} onChange={(e) => setCustomNames({...customNames, eps: e.target.value})} required />}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1">ARL</label>
@@ -256,6 +265,7 @@ export default function Payroll() {
                     <option value="">Seleccione ARL</option>
                     {colombianData.arl.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+                  {form.arl === 'OTRO' && <input className="mt-1" placeholder="Nombre ARL" value={customNames.arl} onChange={(e) => setCustomNames({...customNames, arl: e.target.value})} required />}
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
@@ -265,6 +275,7 @@ export default function Payroll() {
                     <option value="">Seleccione Fondo</option>
                     {colombianData.pension.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+                  {form.pension === 'OTRO' && <input className="mt-1" placeholder="Nombre Fondo" value={customNames.pension} onChange={(e) => setCustomNames({...customNames, pension: e.target.value})} required />}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1">Cesantías</label>
@@ -272,6 +283,7 @@ export default function Payroll() {
                     <option value="">Seleccione Fondo</option>
                     {colombianData.cesantias.map(t => <option key={t} value={t}>{t}</option>)}
                   </select>
+                  {form.cesantias === 'OTRO' && <input className="mt-1" placeholder="Nombre Fondo" value={customNames.cesantias} onChange={(e) => setCustomNames({...customNames, cesantias: e.target.value})} required />}
                 </div>
               </div>
               <button type="submit" className="btn-primary w-full justify-center py-2.5">Vincular Empleado</button>
