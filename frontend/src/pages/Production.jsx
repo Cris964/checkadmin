@@ -4,14 +4,25 @@ import { toast } from 'sonner';
 import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2 } from 'lucide-react';
 
 const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipes, rawMaterials, advanceOrder, expandedOrder, setExpandedOrder, warehouses, fmt }) => {
-  const [localChecklist, setLocalChecklist] = useState([]);
-  const [responsable, setResponsable] = useState('');
-  const [observations, setObservations] = useState('');
-
   const currentIdx = stageIdx(o.stage);
   const nextStage = stages[currentIdx + 1];
   const recipe = getRecipeForOrder(o);
   const isExpanded = expandedOrder === o.id;
+
+  useEffect(() => {
+    if (isExpanded && o) {
+      if (o.stage === 'alistamiento' || o.stage === 'montada') {
+        const saved = o.checklist_alistamiento || [];
+        setLocalChecklist(saved.filter(item => item.checked).map(item => item.material_id));
+        setResponsable(o.responsable_alistamiento || '');
+      } else if (o.stage === 'procesamiento') {
+        const saved = o.checklist_procesamiento || [];
+        setLocalChecklist(saved.filter(item => item.checked).map(item => item.task));
+        setResponsable(o.responsable_procesamiento || '');
+        setObservations(o.novedades || '');
+      }
+    }
+  }, [isExpanded, o]);
 
   return (
     <div key={o.id} className="glass-card overflow-hidden">
@@ -49,14 +60,17 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
       </div>
       {isExpanded && recipe && (
         <div className="px-4 pb-4 border-t border-gray-100 animate-fade-in bg-gray-50/50">
-          {o.stage === 'alistamiento' && (
+          {(o.stage === 'alistamiento' || o.stage === 'montada') && (
             <div className="mt-4 space-y-4">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LISTA DE ALISTAMIENTO (PRE-ALISTADOR)</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {(recipe.ingredients || []).map((ing, i) => {
                   const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
-                  const neededQty = (ing.quantity * o.quantity) / (recipe.expected_quantity || 1);
-                  const hasStock = mat ? mat.current_stock >= neededQty : false;
+                  const orderQty = parseFloat(o.quantity) || 0;
+                  const recipeIngQty = parseFloat(ing.quantity) || 0;
+                  const recipeExpQty = parseFloat(recipe.expected_quantity) || 1;
+                  const neededQty = (recipeIngQty * orderQty) / recipeExpQty;
+                  const hasStock = mat ? (parseFloat(mat.current_stock) || 0) >= neededQty : false;
                   const isChecked = localChecklist.includes(ing.raw_material_id);
 
                   return (
@@ -73,7 +87,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                       </div>
                       <div className="flex-1">
                         <p className="font-bold text-sm">{ing.raw_material_name}</p>
-                        <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {neededQty.toFixed(2)} {ing.unit}</p>
+                        <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {isNaN(neededQty) ? '0.00' : neededQty.toFixed(2)} {ing.unit}</p>
                       </div>
                     </div>
                   );
@@ -93,8 +107,8 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                 <button 
                   disabled={!responsable || localChecklist.length < (recipe.ingredients?.length || 0)}
                   onClick={() => advanceOrder(o.id, 'procesamiento', { 
-                    checklist: localChecklist.map(id => ({material_id: id, checked: true})),
-                    responsable 
+                    responsable_alistamiento: responsable,
+                    checklist_alistamiento: localChecklist.map(id => ({material_id: id, checked: true}))
                   })}
                   className="btn-primary w-full sm:w-auto h-[42px] px-6 font-bold uppercase tracking-widest text-xs"
                 >
@@ -164,8 +178,8 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                   const actual = prompt("Cantidad final producida:", o.quantity);
                   if (actual) {
                     advanceOrder(o.id, 'terminada', { 
-                      checklist: localChecklist.map(t => ({task: t, checked: true})),
-                      responsable,
+                      checklist_procesamiento: localChecklist.map(t => ({task: t, checked: true})),
+                      responsable_procesamiento: responsable,
                       novedades: observations,
                       actual_output: parseInt(actual)
                     });

@@ -34,14 +34,36 @@ export default function Payroll() {
     if (filters.start_date) params.start_date = filters.start_date;
     if (filters.end_date) params.end_date = filters.end_date;
 
-    const [e, l, c] = await Promise.all([
-      api.get('/employees'), 
-      api.get('/payroll', { params }),
-      api.get('/constants/colombian-data')
-    ]);
-    setEmployees(Array.isArray(e.data) ? e.data : (e.data?.data || [])); 
-    setLiquidations(Array.isArray(l.data) ? l.data : (l.data?.data || []));
-    setColombianData(c.data);
+    try {
+      const results = await Promise.allSettled([
+        api.get('/employees'), 
+        api.get('/payroll', { params }),
+        api.get('/constants/colombian-data')
+      ]);
+
+      if (results[0].status === 'fulfilled') {
+        const eData = results[0].value.data;
+        console.log("Employees data received:", eData);
+        setEmployees(Array.isArray(eData) ? eData : (eData?.data || []));
+      } else {
+        console.error("Failed to load employees:", results[0].reason);
+        toast.error("Error al cargar empleados");
+      }
+
+      if (results[1].status === 'fulfilled') {
+        const lData = results[1].value.data;
+        setLiquidations(Array.isArray(lData) ? lData : (lData?.data || []));
+      } else {
+        console.error("Failed to load payroll:", results[1].reason);
+      }
+
+      if (results[2].status === 'fulfilled') {
+        setColombianData(results[2].value.data);
+      }
+    } catch (err) {
+      console.error("Unexpected error in loadData:", err);
+      toast.error("Error inesperado al cargar datos");
+    }
   };
   useEffect(() => { loadData(); }, [filters]);
 

@@ -32,23 +32,43 @@ try:
 except Exception:
     db = None
 
+class MockCursor:
+    def __init__(self, data):
+        self.items = data
+    def sort(self, *args, **kwargs):
+        return self
+    async def to_list(self, length):
+        return self.items[:length]
+
+class MockResult:
+    def __init__(self, deleted_count=1, inserted_id="mock_id", modified_count=1):
+        self.deleted_count = deleted_count
+        self.inserted_id = inserted_id
+        self.modified_count = modified_count
+
 class MockCollection:
+    def find(self, query=None, projection=None):
+        return MockCursor([])
     async def find_one(self, query, projection=None):
+        if not query: return None
         email = query.get("email") or query.get("id")
-        if email in ["admin@demo.com", "admin_id"]:
+        if email in ["admin@demo.com", "admin_id", "admin@chekadmin.com"]:
             return {
                 "id": "admin_id",
-                "email": "admin@demo.com",
+                "email": email if "@" in str(email) else "admin@demo.com",
                 "name": "Admin Demo",
                 "company_id": "company_123",
                 "role": "admin",
-                "password": pwd_context.hash("Demo2026!"),
+                "password": pwd_context.hash("Admin123"),
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "permissions": ["dashboard", "sales", "inventory", "production", "payroll", "finance", "settings"]
             }
         return None
-    async def insert_one(self, doc): return None
-    async def update_one(self, q, u): return None
+    async def insert_one(self, doc): return MockResult()
+    async def update_one(self, q, u, upsert=False): return MockResult()
+    async def delete_one(self, q): return MockResult()
+    async def count_documents(self, query): return 0
+    def aggregate(self, pipeline): return MockCursor([])
 
 class MockDB:
     def __init__(self):
@@ -57,11 +77,16 @@ class MockDB:
         self.products = MockCollection()
         self.production_orders = MockCollection()
         self.employees = MockCollection()
+        self.payroll = MockCollection()
         self.cash_shifts = MockCollection()
         self.sales = MockCollection()
         self.sale_items = MockCollection()
+        self.warehouses = MockCollection()
         self.raw_materials = MockCollection()
         self.recipes = MockCollection()
+        self.customers = MockCollection()
+        self.transactions = MockCollection()
+        self.password_resets = MockCollection()
 
 mock_db = MockDB()
 
@@ -339,15 +364,14 @@ class ProductionOrderCreate(BaseModel):
     warehouse_id: Optional[str] = None
     start_time: Optional[str] = None
 
-class ProductionOrderUpdate(BaseModel):
-    stage: str
-    warehouse_person: Optional[str] = None
-    operator_person: Optional[str] = None
-    actual_output: Optional[int] = None
-    observations: Optional[str] = None
+class ProductionOrderAdvance(BaseModel):
+    next_stage: str
+    checklist_alistamiento: Optional[List[dict]] = None
+    checklist_procesamiento: Optional[List[dict]] = None
+    responsable_alistamiento: Optional[str] = None
+    responsable_procesamiento: Optional[str] = None
     novedades: Optional[str] = None
-    start_time: Optional[str] = None
-    end_time: Optional[str] = None
+    actual_output: Optional[int] = None
 
 class CashShift(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -568,7 +592,8 @@ async def get_superadmin_user(current_user: dict = Depends(get_current_user)):
 
 @api_router.get("/superadmin/companies")
 async def get_all_companies(current_user: dict = Depends(get_superadmin_user)):
-    companies = await db.companies.find({}, {"_id": 0}).to_list(1000)
+    database = get_db()
+    companies = await database.companies.find({}, {"_id": 0}).to_list(1000)
     for c in companies:
         if isinstance(c.get('created_at'), str):
             c['created_at'] = datetime.fromisoformat(c['created_at'])
@@ -576,7 +601,8 @@ async def get_all_companies(current_user: dict = Depends(get_superadmin_user)):
 
 @api_router.get("/superadmin/users")
 async def get_all_users(current_user: dict = Depends(get_superadmin_user)):
-    users = await db.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
+    database = get_db()
+    users = await database.users.find({}, {"_id": 0, "password": 0}).to_list(1000)
     for u in users:
         if isinstance(u.get('created_at'), str):
             u['created_at'] = datetime.fromisoformat(u['created_at'])
@@ -586,15 +612,16 @@ async def get_all_users(current_user: dict = Depends(get_superadmin_user)):
 
 @api_router.post("/auth/register", response_model=Token)
 async def register(user_data: UserCreate):
+    database = get_db()
     # Check if user exists
-    existing_user = await db.users.find_one({"email": user_data.email}, {"_id": 0})
+    existing_user = await database.users.find_one({"email": user_data.email}, {"_id": 0})
     if existing_user:
         raise HTTPException(status_code=400, detail="Email already registered")
     
     # Create company
     company_dict = Company(name=user_data.company_name).model_dump()
     company_dict['created_at'] = company_dict['created_at'].isoformat()
-    await db.companies.insert_one(company_dict)
+    await database.companies.insert_one(company_dict)
     
     # Create user
     hashed_pwd = hash_password(user_data.password)
@@ -607,7 +634,7 @@ async def register(user_data: UserCreate):
     user_dict = user.model_dump()
     user_dict['created_at'] = user_dict['created_at'].isoformat()
     user_dict['password'] = hashed_pwd
-    await db.users.insert_one(user_dict)
+    await database.users.insert_one(user_dict)
     
     # Create token
     token = create_access_token({
@@ -733,19 +760,20 @@ async def reset_password(req: ResetPasswordRequest):
 
 @api_router.get("/dashboard/stats")
 async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
+    database = get_db()
     company_id = current_user["company_id"]
     
     # Total products in stock
-    total_products = await db.products.count_documents({"company_id": company_id})
+    total_products = await database.products.count_documents({"company_id": company_id})
     
     # Production orders count
-    production_orders = await db.production_orders.count_documents({"company_id": company_id})
+    production_orders = await database.production_orders.count_documents({"company_id": company_id})
     
     # Employees count
-    employees = await db.employees.count_documents({"company_id": company_id, "status": "active"})
+    employees = await database.employees.count_documents({"company_id": company_id, "status": "active"})
     
     # Current shift and total sales
-    current_shift = await db.cash_shifts.find_one(
+    current_shift = await database.cash_shifts.find_one(
         {"company_id": company_id, "status": "open"},
         {"_id": 0}
     )
@@ -754,7 +782,7 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
     cash_box = 0.0
     
     if current_shift:
-        sales_list = await db.sales.find(
+        sales_list = await database.sales.find(
             {"company_id": company_id, "shift_id": current_shift['id']},
             {"_id": 0}
         ).to_list(1000)
@@ -772,14 +800,14 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
         {"$sort": {"total_quantity": -1}},
         {"$limit": 5}
     ]
-    top_products = await db.sale_items.aggregate(pipeline).to_list(5)
+    top_products = await database.sale_items.aggregate(pipeline).to_list(5)
     
     # Weekly sales (last 7 days)
     weekly_sales = []
     for i in range(6, -1, -1):
         date = datetime.now(timezone.utc) - timedelta(days=i)
         date_str = date.strftime("%Y-%m-%d")
-        day_sales = await db.sales.find(
+        day_sales = await database.sales.find(
             {
                 "company_id": company_id,
                 "created_at": {
@@ -810,7 +838,8 @@ async def get_dashboard_stats(current_user: dict = Depends(get_current_user)):
 
 @api_router.get("/products", response_model=List[Product])
 async def get_products(current_user: dict = Depends(get_current_user)):
-    products = await db.products.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    database = get_db()
+    products = await database.products.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
     for p in products:
         if isinstance(p['created_at'], str):
             p['created_at'] = datetime.fromisoformat(p['created_at'])
@@ -830,15 +859,17 @@ async def create_product(product_data: ProductCreate, current_user: dict = Depen
     )
     product_dict = product.model_dump()
     product_dict['created_at'] = product_dict['created_at'].isoformat()
-    await db.products.insert_one(product_dict)
+    database = get_db()
+    await database.products.insert_one(product_dict)
     return product
 
 @api_router.put("/products/{product_id}", response_model=Product)
 async def update_product(product_id: str, product_data: ProductUpdate, current_user: dict = Depends(get_current_user)):
     update_fields = {k: v for k, v in product_data.model_dump().items() if v is not None}
     
+    database = get_db()
     # Recalculate profit if costs changed
-    existing = await db.products.find_one({"id": product_id, "company_id": current_user["company_id"]}, {"_id": 0})
+    existing = await database.products.find_one({"id": product_id, "company_id": current_user["company_id"]}, {"_id": 0})
     if not existing:
         raise HTTPException(status_code=404, detail="Product not found")
     
@@ -848,19 +879,20 @@ async def update_product(product_id: str, product_data: ProductUpdate, current_u
         update_fields['profit_percentage'] = ((cost_sell - cost_buy) / cost_buy) * 100
     
     if update_fields:
-        await db.products.update_one(
+        await database.products.update_one(
             {"id": product_id, "company_id": current_user["company_id"]},
             {"$set": update_fields}
         )
     
-    product_dict = await db.products.find_one({"id": product_id}, {"_id": 0})
+    product_dict = await database.products.find_one({"id": product_id}, {"_id": 0})
     if isinstance(product_dict['created_at'], str):
         product_dict['created_at'] = datetime.fromisoformat(product_dict['created_at'])
     return Product(**product_dict)
 
 @api_router.delete("/products/{product_id}")
 async def delete_product(product_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.products.delete_one({"id": product_id, "company_id": current_user["company_id"]})
+    database = get_db()
+    result = await database.products.delete_one({"id": product_id, "company_id": current_user["company_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted"}
@@ -869,7 +901,8 @@ async def delete_product(product_id: str, current_user: dict = Depends(get_curre
 
 @api_router.get("/warehouses", response_model=List[Warehouse])
 async def get_warehouses(current_user: dict = Depends(get_current_user)):
-    warehouses = await db.warehouses.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    database = get_db()
+    warehouses = await database.warehouses.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
     for w in warehouses:
         if isinstance(w['created_at'], str):
             w['created_at'] = datetime.fromisoformat(w['created_at'])
@@ -880,12 +913,14 @@ async def create_warehouse(warehouse_data: WarehouseCreate, current_user: dict =
     warehouse = Warehouse(company_id=current_user["company_id"], **warehouse_data.model_dump())
     warehouse_dict = warehouse.model_dump()
     warehouse_dict['created_at'] = warehouse_dict['created_at'].isoformat()
-    await db.warehouses.insert_one(warehouse_dict)
+    database = get_db()
+    await database.warehouses.insert_one(warehouse_dict)
     return warehouse
 
 @api_router.get("/warehouses/{warehouse_id}/products")
 async def get_warehouse_products(warehouse_id: str, current_user: dict = Depends(get_current_user)):
-    products = await db.products.find(
+    database = get_db()
+    products = await database.products.find(
         {"company_id": current_user["company_id"], "warehouse_id": warehouse_id},
         {"_id": 0}
     ).to_list(1000)
@@ -896,7 +931,8 @@ async def get_warehouse_products(warehouse_id: str, current_user: dict = Depends
 
 @api_router.delete("/warehouses/{warehouse_id}")
 async def delete_warehouse(warehouse_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.warehouses.delete_one({"id": warehouse_id, "company_id": current_user["company_id"]})
+    database = get_db()
+    result = await database.warehouses.delete_one({"id": warehouse_id, "company_id": current_user["company_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Warehouse not found")
     return {"message": "Warehouse deleted"}
@@ -905,7 +941,8 @@ async def delete_warehouse(warehouse_id: str, current_user: dict = Depends(get_c
 
 @api_router.get("/raw-materials", response_model=List[RawMaterial])
 async def get_raw_materials(current_user: dict = Depends(get_current_user)):
-    raw_materials = await db.raw_materials.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    database = get_db()
+    raw_materials = await database.raw_materials.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
     for rm in raw_materials:
         if isinstance(rm['created_at'], str):
             rm['created_at'] = datetime.fromisoformat(rm['created_at'])
@@ -916,20 +953,22 @@ async def create_raw_material(material_data: RawMaterialCreate, current_user: di
     material = RawMaterial(company_id=current_user["company_id"], **material_data.model_dump())
     material_dict = material.model_dump()
     material_dict['created_at'] = material_dict['created_at'].isoformat()
-    await db.raw_materials.insert_one(material_dict)
+    database = get_db()
+    await database.raw_materials.insert_one(material_dict)
     return material
 
 @api_router.put("/raw-materials/{material_id}", response_model=RawMaterial)
 async def update_raw_material(material_id: str, material_data: RawMaterialUpdate, current_user: dict = Depends(get_current_user)):
     update_fields = {k: v for k, v in material_data.model_dump().items() if v is not None}
     
+    database = get_db()
     if update_fields:
-        await db.raw_materials.update_one(
+        await database.raw_materials.update_one(
             {"id": material_id, "company_id": current_user["company_id"]},
             {"$set": update_fields}
         )
     
-    material_dict = await db.raw_materials.find_one({"id": material_id}, {"_id": 0})
+    material_dict = await database.raw_materials.find_one({"id": material_id}, {"_id": 0})
     if not material_dict:
         raise HTTPException(status_code=404, detail="Raw material not found")
     if isinstance(material_dict['created_at'], str):
@@ -938,7 +977,8 @@ async def update_raw_material(material_id: str, material_data: RawMaterialUpdate
 
 @api_router.delete("/raw-materials/{material_id}")
 async def delete_raw_material(material_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.raw_materials.delete_one({"id": material_id, "company_id": current_user["company_id"]})
+    database = get_db()
+    result = await database.raw_materials.delete_one({"id": material_id, "company_id": current_user["company_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Raw material not found")
     return {"message": "Raw material deleted"}
@@ -947,7 +987,8 @@ async def delete_raw_material(material_id: str, current_user: dict = Depends(get
 
 @api_router.get("/recipes", response_model=List[Recipe])
 async def get_recipes(current_user: dict = Depends(get_current_user)):
-    recipes = await db.recipes.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    database = get_db()
+    recipes = await database.recipes.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
     for r in recipes:
         if isinstance(r['created_at'], str):
             r['created_at'] = datetime.fromisoformat(r['created_at'])
@@ -955,7 +996,7 @@ async def get_recipes(current_user: dict = Depends(get_current_user)):
             r['ingredients'] = []
         if 'output_product_name' not in r:
             # Get product name if missing
-            product = await db.products.find_one({"id": r.get('output_product_id')}, {"_id": 0})
+            product = await database.products.find_one({"id": r.get('output_product_id')}, {"_id": 0})
             r['output_product_name'] = product['name'] if product else "Unknown"
     return recipes
 
@@ -966,7 +1007,8 @@ async def create_recipe(recipe_data: RecipeCreate, current_user: dict = Depends(
     recipe_dict['created_at'] = recipe_dict['created_at'].isoformat()
     # Convert ingredients to dict
     recipe_dict['ingredients'] = [ing.model_dump() if hasattr(ing, 'model_dump') else ing for ing in recipe_dict['ingredients']]
-    await db.recipes.insert_one(recipe_dict)
+    database = get_db()
+    await database.recipes.insert_one(recipe_dict)
     return recipe
 
 @api_router.put("/recipes/{recipe_id}", response_model=Recipe)
@@ -974,12 +1016,13 @@ async def update_recipe(recipe_id: str, recipe_data: RecipeCreate, current_user:
     update_data = recipe_data.model_dump()
     update_data['ingredients'] = [ing.model_dump() if hasattr(ing, 'model_dump') else ing for ing in update_data['ingredients']]
     
-    await db.recipes.update_one(
+    database = get_db()
+    await database.recipes.update_one(
         {"id": recipe_id, "company_id": current_user["company_id"]},
         {"$set": update_data}
     )
     
-    recipe_dict = await db.recipes.find_one({"id": recipe_id}, {"_id": 0})
+    recipe_dict = await database.recipes.find_one({"id": recipe_id}, {"_id": 0})
     if not recipe_dict:
         raise HTTPException(status_code=404, detail="Recipe not found")
     if isinstance(recipe_dict['created_at'], str):
@@ -988,7 +1031,8 @@ async def update_recipe(recipe_id: str, recipe_data: RecipeCreate, current_user:
 
 @api_router.delete("/recipes/{recipe_id}")
 async def delete_recipe(recipe_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.recipes.delete_one({"id": recipe_id, "company_id": current_user["company_id"]})
+    database = get_db()
+    result = await database.recipes.delete_one({"id": recipe_id, "company_id": current_user["company_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Recipe not found")
     return {"message": "Recipe deleted"}
@@ -997,7 +1041,8 @@ async def delete_recipe(recipe_id: str, current_user: dict = Depends(get_current
 
 @api_router.get("/production-orders", response_model=List[ProductionOrder])
 async def get_production_orders(current_user: dict = Depends(get_current_user)):
-    orders = await db.production_orders.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    database = get_db()
+    orders = await database.production_orders.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
     for o in orders:
         if isinstance(o['created_at'], str):
             o['created_at'] = datetime.fromisoformat(o['created_at'])
@@ -1007,28 +1052,42 @@ async def get_production_orders(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/production-orders", response_model=ProductionOrder)
 async def create_production_order(order_data: ProductionOrderCreate, current_user: dict = Depends(get_current_user)):
-    order = ProductionOrder(
+    database = get_db()
+    # Pre-populate checklist from recipe if available
+    recipe = await database.recipes.find_one({"id": order_data.recipe_id}, {"_id": 0})
+    checklist_alistamiento = []
+    if recipe:
+        for ing in recipe.get('ingredients', []):
+            checklist_alistamiento.append({
+                "material_id": ing.get('raw_material_id'),
+                "name": ing.get('raw_material_name'),
+                "checked": False
+            })
+    
+    new_order = ProductionOrder(
         company_id=current_user["company_id"],
         created_by=current_user["email"],
+        checklist_alistamiento=checklist_alistamiento,
         **order_data.model_dump()
     )
-    order_dict = order.model_dump()
+    order_dict = new_order.model_dump()
     order_dict['created_at'] = order_dict['created_at'].isoformat()
     order_dict['updated_at'] = order_dict['updated_at'].isoformat()
-    await db.production_orders.insert_one(order_dict)
-    return order
+    await database.production_orders.insert_one(order_dict)
+    return new_order
 
 @api_router.put("/production-orders/{order_id}", response_model=ProductionOrder)
 async def update_production_order(order_id: str, order_data: ProductionOrderUpdate, current_user: dict = Depends(get_current_user)):
     update_fields = {k: v for k, v in order_data.model_dump().items() if v is not None}
     update_fields['updated_at'] = datetime.now(timezone.utc).isoformat()
     
-    await db.production_orders.update_one(
+    database = get_db()
+    await database.production_orders.update_one(
         {"id": order_id, "company_id": current_user["company_id"]},
         {"$set": update_fields}
     )
     
-    order_dict = await db.production_orders.find_one({"id": order_id}, {"_id": 0})
+    order_dict = await database.production_orders.find_one({"id": order_id}, {"_id": 0})
     if not order_dict:
         raise HTTPException(status_code=404, detail="Production order not found")
     
@@ -1038,11 +1097,70 @@ async def update_production_order(order_id: str, order_data: ProductionOrderUpda
         order_dict['updated_at'] = datetime.fromisoformat(order_dict['updated_at'])
     return ProductionOrder(**order_dict)
 
+@api_router.post("/production-orders/{order_id}/advance", response_model=ProductionOrder)
+async def advance_production_order(order_id: str, data: ProductionOrderAdvance, current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    order = await database.production_orders.find_one({"id": order_id, "company_id": current_user["company_id"]}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    update_fields = {
+        "stage": data.next_stage,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if data.checklist_alistamiento is not None:
+        update_fields["checklist_alistamiento"] = data.checklist_alistamiento
+    if data.checklist_procesamiento is not None:
+        update_fields["checklist_procesamiento"] = data.checklist_procesamiento
+    if data.responsable_alistamiento:
+        update_fields["responsable_alistamiento"] = data.responsable_alistamiento
+    if data.responsable_procesamiento:
+        update_fields["responsable_procesamiento"] = data.responsable_procesamiento
+    if data.novedades:
+        update_fields["novedades"] = data.novedades
+    if data.actual_output is not None:
+        update_fields["actual_output"] = data.actual_output
+    
+    if data.next_stage == 'terminada':
+        update_fields["end_time"] = datetime.now(timezone.utc).isoformat()
+        
+        # Update Inventory: subtract ingredients, add finished product
+        recipe = await database.recipes.find_one({"id": order["recipe_id"]}, {"_id": 0})
+        if recipe:
+            # 1. Subtract Ingredients
+            for ing in recipe.get('ingredients', []):
+                needed = (ing['quantity'] * order['quantity']) / recipe['expected_quantity']
+                await database.raw_materials.update_one(
+                    {"id": ing['raw_material_id'], "company_id": current_user["company_id"]},
+                    {"$inc": {"current_stock": -needed}}
+                )
+            
+            # 2. Add Finished Product
+            qty_to_add = data.actual_output if data.actual_output is not None else order['quantity']
+            await database.products.update_one(
+                {"id": recipe['output_product_id'], "company_id": current_user["company_id"]},
+                {"$inc": {"stock": qty_to_add}}
+            )
+            
+    await database.production_orders.update_one(
+        {"id": order_id},
+        {"$set": update_fields}
+    )
+    
+    updated_order = await database.production_orders.find_one({"id": order_id}, {"_id": 0})
+    if isinstance(updated_order['created_at'], str):
+        updated_order['created_at'] = datetime.fromisoformat(updated_order['created_at'])
+    if isinstance(updated_order['updated_at'], str):
+        updated_order['updated_at'] = datetime.fromisoformat(updated_order['updated_at'])
+    return ProductionOrder(**updated_order)
+
 # ==================== CASH SHIFTS ====================
 
 @api_router.get("/cash-shifts/current")
 async def get_current_shift(current_user: dict = Depends(get_current_user)):
-    shift = await db.cash_shifts.find_one(
+    database = get_db()
+    shift = await database.cash_shifts.find_one(
         {"company_id": current_user["company_id"], "status": "open"},
         {"_id": 0}
     )
@@ -1052,15 +1170,16 @@ async def get_current_shift(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/cash-shifts", response_model=CashShift)
 async def open_cash_shift(shift_data: CashShiftCreate, current_user: dict = Depends(get_current_user)):
+    database = get_db()
     # Check if there's already an open shift
-    existing = await db.cash_shifts.find_one(
+    existing = await database.cash_shifts.find_one(
         {"company_id": current_user["company_id"], "status": "open"},
         {"_id": 0}
     )
     if existing:
         raise HTTPException(status_code=400, detail="There's already an open cash shift")
     
-    user = await db.users.find_one({"id": current_user["user_id"]}, {"_id": 0})
+    user = await database.users.find_one({"id": current_user["user_id"]}, {"_id": 0})
     shift = CashShift(
         company_id=current_user["company_id"],
         user_id=current_user["user_id"],
@@ -1069,12 +1188,13 @@ async def open_cash_shift(shift_data: CashShiftCreate, current_user: dict = Depe
     )
     shift_dict = shift.model_dump()
     shift_dict['opened_at'] = shift_dict['opened_at'].isoformat()
-    await db.cash_shifts.insert_one(shift_dict)
+    await database.cash_shifts.insert_one(shift_dict)
     return shift
 
 @api_router.post("/cash-shifts/{shift_id}/close")
 async def close_cash_shift(shift_id: str, current_user: dict = Depends(get_current_user)):
-    await db.cash_shifts.update_one(
+    database = get_db()
+    await database.cash_shifts.update_one(
         {"id": shift_id, "company_id": current_user["company_id"]},
         {"$set": {"status": "closed", "closed_at": datetime.now(timezone.utc).isoformat()}}
     )
@@ -1098,7 +1218,8 @@ async def get_sales(
     if user_id:
         query["user_id"] = user_id
         
-    sales = await db.sales.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    database = get_db()
+    sales = await database.sales.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     for s in sales:
         if isinstance(s['created_at'], str):
             s['created_at'] = datetime.fromisoformat(s['created_at'])
@@ -1110,7 +1231,8 @@ async def update_sale_voucher(
     update: SaleVoucherUpdate, 
     current_user: dict = Depends(get_current_user)
 ):
-    sale = await db.sales.find_one({"id": sale_id, "company_id": current_user["company_id"]})
+    database = get_db()
+    sale = await database.sales.find_one({"id": sale_id, "company_id": current_user["company_id"]})
     if not sale:
         raise HTTPException(status_code=404, detail="Sale not found")
     
@@ -1126,7 +1248,7 @@ async def update_sale_voucher(
         "new_value": update.voucher_number
     }
     
-    await db.sales.update_one(
+    await database.sales.update_one(
         {"id": sale_id},
         {
             "$set": {"payment_details": payment_details},
@@ -1137,8 +1259,9 @@ async def update_sale_voucher(
 
 @api_router.post("/sales", response_model=Sale)
 async def create_sale(sale_data: SaleCreate, current_user: dict = Depends(get_current_user)):
+    database = get_db()
     # Verify open shift
-    current_shift = await db.cash_shifts.find_one(
+    current_shift = await database.cash_shifts.find_one(
         {"company_id": current_user["company_id"], "status": "open"},
         {"_id": 0}
     )
@@ -1151,7 +1274,7 @@ async def create_sale(sale_data: SaleCreate, current_user: dict = Depends(get_cu
         total += item.subtotal
         
         # Decrease product stock
-        await db.products.update_one(
+        await database.products.update_one(
             {"id": item.product_id, "company_id": current_user["company_id"]},
             {"$inc": {"stock_current": -item.quantity}}
         )
@@ -1159,7 +1282,7 @@ async def create_sale(sale_data: SaleCreate, current_user: dict = Depends(get_cu
         # Save sale item
         item_dict = item.model_dump()
         item_dict['company_id'] = current_user["company_id"]
-        await db.sale_items.insert_one(item_dict)
+        await database.sale_items.insert_one(item_dict)
     
     # Calculate change if payment method is cash
     change = None
@@ -1180,7 +1303,7 @@ async def create_sale(sale_data: SaleCreate, current_user: dict = Depends(get_cu
     )
     sale_dict = sale.model_dump()
     sale_dict['created_at'] = sale_dict['created_at'].isoformat()
-    await db.sales.insert_one(sale_dict)
+    await database.sales.insert_one(sale_dict)
     
     # Send invoice if requested
     if sale_data.requires_invoice and sale_data.customer_email:
@@ -1211,7 +1334,8 @@ async def get_payroll(
         if "created_at" not in query: query["created_at"] = {}
         query["created_at"]["$lte"] = end_date + "T23:59:59"
         
-    liquidations = await db.payroll.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
+    database = get_db()
+    liquidations = await database.payroll.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     result = []
     for l in liquidations:
         if isinstance(l['created_at'], str):
@@ -1239,8 +1363,9 @@ async def get_payroll(
 
 @api_router.post("/payroll/liquidate", response_model=PayrollLiquidation)
 async def liquidate_payroll(liquidation_data: PayrollLiquidationCreate, current_user: dict = Depends(get_current_user)):
+    database = get_db()
     # Get employee
-    employee = await db.employees.find_one(
+    employee = await database.employees.find_one(
         {"id": liquidation_data.employee_id, "company_id": current_user["company_id"]},
         {"_id": 0}
     )
@@ -1309,7 +1434,7 @@ async def liquidate_payroll(liquidation_data: PayrollLiquidationCreate, current_
     )
     liquidation_dict = liquidation.model_dump()
     liquidation_dict['created_at'] = liquidation_dict['created_at'].isoformat()
-    await db.payroll.insert_one(liquidation_dict)
+    await database.payroll.insert_one(liquidation_dict)
     
     # Send email if employee has email
     if employee.get('email'):
@@ -1329,7 +1454,8 @@ async def liquidate_payroll(liquidation_data: PayrollLiquidationCreate, current_
 
 @api_router.get("/transactions", response_model=List[Transaction])
 async def get_transactions(current_user: dict = Depends(get_current_user)):
-    transactions = await db.transactions.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    database = get_db()
+    transactions = await database.transactions.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
     for t in transactions:
         if isinstance(t['created_at'], str):
             t['created_at'] = datetime.fromisoformat(t['created_at'])
@@ -1340,12 +1466,14 @@ async def create_transaction(transaction_data: TransactionCreate, current_user: 
     transaction = Transaction(company_id=current_user["company_id"], **transaction_data.model_dump())
     transaction_dict = transaction.model_dump()
     transaction_dict['created_at'] = transaction_dict['created_at'].isoformat()
-    await db.transactions.insert_one(transaction_dict)
+    database = get_db()
+    await database.transactions.insert_one(transaction_dict)
     return transaction
 
 @api_router.delete("/transactions/{transaction_id}")
 async def delete_transaction(transaction_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.transactions.delete_one({"id": transaction_id, "company_id": current_user["company_id"]})
+    database = get_db()
+    result = await database.transactions.delete_one({"id": transaction_id, "company_id": current_user["company_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Transaction not found")
     return {"message": "Transaction deleted"}
@@ -1354,7 +1482,8 @@ async def delete_transaction(transaction_id: str, current_user: dict = Depends(g
 
 @api_router.get("/customers", response_model=List[Customer])
 async def get_customers(current_user: dict = Depends(get_current_user)):
-    customers = await db.customers.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    database = get_db()
+    customers = await database.customers.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
     for c in customers:
         if isinstance(c.get('created_at'), str):
             c['created_at'] = datetime.fromisoformat(c['created_at'])
@@ -1365,18 +1494,20 @@ async def create_customer(customer_data: CustomerCreate, current_user: dict = De
     customer = Customer(company_id=current_user["company_id"], **customer_data.model_dump())
     customer_dict = customer.model_dump()
     customer_dict['created_at'] = customer_dict['created_at'].isoformat()
-    await db.customers.insert_one(customer_dict)
+    database = get_db()
+    await database.customers.insert_one(customer_dict)
     return customer
 
 @api_router.put("/customers/{customer_id}", response_model=Customer)
 async def update_customer(customer_id: str, customer_data: CustomerUpdate, current_user: dict = Depends(get_current_user)):
     update_fields = {k: v for k, v in customer_data.model_dump().items() if v is not None}
+    database = get_db()
     if update_fields:
-        await db.customers.update_one(
+        await database.customers.update_one(
             {"id": customer_id, "company_id": current_user["company_id"]},
             {"$set": update_fields}
         )
-    customer_dict = await db.customers.find_one({"id": customer_id}, {"_id": 0})
+    customer_dict = await database.customers.find_one({"id": customer_id}, {"_id": 0})
     if not customer_dict:
         raise HTTPException(status_code=404, detail="Customer not found")
     if isinstance(customer_dict.get('created_at'), str):
@@ -1385,7 +1516,8 @@ async def update_customer(customer_id: str, customer_data: CustomerUpdate, curre
 
 @api_router.delete("/customers/{customer_id}")
 async def delete_customer(customer_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.customers.delete_one({"id": customer_id, "company_id": current_user["company_id"]})
+    database = get_db()
+    result = await database.customers.delete_one({"id": customer_id, "company_id": current_user["company_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Customer not found")
     return {"message": "Customer deleted"}
@@ -1497,12 +1629,13 @@ async def get_caja_mayor(
         else:
             query["created_at"] = {"$lte": end_date + "T23:59:59"}
 
+    database = get_db()
     # Get all sales totals
-    sales = await db.sales.find(query, {"_id": 0}).to_list(10000)
+    sales = await database.sales.find(query, {"_id": 0}).to_list(10000)
     total_ingresos = sum(s.get('total', 0) for s in sales)
 
     # Get all transactions
-    transactions = await db.transactions.find(query, {"_id": 0}).to_list(10000)
+    transactions = await database.transactions.find(query, {"_id": 0}).to_list(10000)
     total_caja_menor = sum(t['amount'] for t in transactions if t.get('type') == 'caja_menor')
     total_gastos = sum(t['amount'] for t in transactions if t.get('type') in ['pago', 'gasto'])
     gastos_fijos = sum(t['amount'] for t in transactions if t.get('category') == 'fijo')
@@ -1523,21 +1656,22 @@ async def get_caja_mayor(
 async def get_balance_general(current_user: dict = Depends(get_current_user)):
     company_id = current_user["company_id"]
 
+    database = get_db()
     # Assets: inventory value + cash
-    products = await db.products.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
+    products = await database.products.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
     inventory_value = sum(p.get('cost_buy', 0) * p.get('stock_current', 0) for p in products)
 
     # Sales total (income)
-    sales = await db.sales.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
+    sales = await database.sales.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
     total_ventas = sum(s.get('total', 0) for s in sales)
 
     # Expenses
-    transactions = await db.transactions.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
+    transactions = await database.transactions.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
     total_gastos = sum(t['amount'] for t in transactions if t.get('type') in ['pago', 'gasto'])
     total_caja_menor = sum(t['amount'] for t in transactions if t.get('type') == 'caja_menor')
 
     # Payroll costs
-    payroll = await db.payroll.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
+    payroll = await database.payroll.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
     total_nomina = sum(p.get('net_salary', p.get('total', 0)) for p in payroll)
 
     return {
@@ -1582,8 +1716,9 @@ async def send_invoice_email_endpoint(req: InvoiceEmailRequest, current_user: di
 async def get_notifications(current_user: dict = Depends(get_current_user)):
     notifications = []
     
+    database = get_db()
     # Low stock alerts
-    low_stock_products = await db.products.find({
+    low_stock_products = await database.products.find({
         "company_id": current_user["company_id"],
         "$expr": { "$lt": ["$stock_current", "$stock_min"] }
     }, {"_id": 0}).to_list(100)
@@ -1601,7 +1736,7 @@ async def get_notifications(current_user: dict = Depends(get_current_user)):
     
     # Expiring soon alerts (< 30 days)
     today = datetime.now()
-    products_with_expiry = await db.products.find({
+    products_with_expiry = await database.products.find({
         "company_id": current_user["company_id"],
         "expiry_date": {"$ne": None}
     }, {"_id": 0}).to_list(100)
@@ -1627,15 +1762,17 @@ async def get_notifications(current_user: dict = Depends(get_current_user)):
 # ==================== USER MANAGEMENT (ADMIN ONLY) ====================
 
 async def require_admin(current_user: dict = Depends(get_current_user)) -> dict:
+    database = get_db()
     # Get user from DB to verify role
-    user_dict = await db.users.find_one({"id": current_user["user_id"]}, {"_id": 0})
+    user_dict = await database.users.find_one({"id": current_user["user_id"]}, {"_id": 0})
     if not user_dict or user_dict.get("role") != "admin":
         raise HTTPException(status_code=403, detail="Admin access required")
     return current_user
 
 @api_router.get("/users/company", response_model=List[User])
 async def get_company_users(admin_user: dict = Depends(require_admin)):
-    users = await db.users.find({"company_id": admin_user["company_id"]}, {"_id": 0, "password": 0}).to_list(100)
+    database = get_db()
+    users = await database.users.find({"company_id": admin_user["company_id"]}, {"_id": 0, "password": 0}).to_list(100)
     for u in users:
         if isinstance(u['created_at'], str):
             u['created_at'] = datetime.fromisoformat(u['created_at'])
@@ -1645,8 +1782,9 @@ async def get_company_users(admin_user: dict = Depends(require_admin)):
 
 @api_router.post("/users/company", response_model=User)
 async def create_company_user(user_data: UserCreateByAdmin, admin_user: dict = Depends(require_admin)):
+    database = get_db()
     # Check if user exists
-    existing = await db.users.find_one({"email": user_data.email}, {"_id": 0})
+    existing = await database.users.find_one({"email": user_data.email}, {"_id": 0})
     if existing:
         raise HTTPException(status_code=400, detail="Email already registered")
     
@@ -1661,7 +1799,8 @@ async def create_company_user(user_data: UserCreateByAdmin, admin_user: dict = D
     user_dict = new_user.model_dump()
     user_dict['created_at'] = user_dict['created_at'].isoformat()
     user_dict['password'] = hashed_pwd
-    await db.users.insert_one(user_dict)
+    database = get_db()
+    await database.users.insert_one(user_dict)
     
     return new_user
 
@@ -1674,13 +1813,14 @@ async def update_company_user(user_id: str, update_data: UserUpdateByAdmin, admi
     if 'password' in update_fields:
         update_fields['password'] = hash_password(update_fields['password'])
     
+    database = get_db()
     if update_fields:
-        await db.users.update_one(
+        await database.users.update_one(
             {"id": user_id, "company_id": admin_user["company_id"]},
             {"$set": update_fields}
         )
     
-    user_dict = await db.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
+    user_dict = await database.users.find_one({"id": user_id}, {"_id": 0, "password": 0})
     if not user_dict:
         raise HTTPException(status_code=404, detail="User not found")
     if isinstance(user_dict['created_at'], str):
@@ -1693,7 +1833,8 @@ async def delete_company_user(user_id: str, admin_user: dict = Depends(require_a
     if user_id == admin_user["user_id"]:
         raise HTTPException(status_code=400, detail="Cannot delete your own account")
     
-    result = await db.users.delete_one({"id": user_id, "company_id": admin_user["company_id"]})
+    database = get_db()
+    result = await database.users.delete_one({"id": user_id, "company_id": admin_user["company_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="User not found")
     return {"message": "User deleted"}
@@ -1702,8 +1843,9 @@ async def delete_company_user(user_id: str, admin_user: dict = Depends(require_a
 
 @api_router.post("/cash-shifts/{shift_id}/close-with-summary")
 async def close_cash_shift_with_summary(shift_id: str, current_user: dict = Depends(get_current_user)):
+    database = get_db()
     # Get shift
-    shift = await db.cash_shifts.find_one(
+    shift = await database.cash_shifts.find_one(
         {"id": shift_id, "company_id": current_user["company_id"]},
         {"_id": 0}
     )
@@ -1711,7 +1853,7 @@ async def close_cash_shift_with_summary(shift_id: str, current_user: dict = Depe
         raise HTTPException(status_code=404, detail="Shift not found")
     
     # Get all sales from this shift
-    sales = await db.sales.find(
+    sales = await database.sales.find(
         {"shift_id": shift_id, "company_id": current_user["company_id"]},
         {"_id": 0}
     ).to_list(1000)
@@ -1736,7 +1878,7 @@ async def close_cash_shift_with_summary(shift_id: str, current_user: dict = Depe
     }
     
     # Update shift with summary
-    await db.cash_shifts.update_one(
+    await database.cash_shifts.update_one(
         {"id": shift_id, "company_id": current_user["company_id"]},
         {"$set": {
             "status": "closed",
@@ -1763,12 +1905,13 @@ async def get_cash_shifts_history(
         else:
             query["opened_at"] = {"$lte": end_date + "T23:59:59"}
     
-    shifts = await db.cash_shifts.find(query, {"_id": 0}).sort("opened_at", -1).to_list(100)
+    database = get_db()
+    shifts = await database.cash_shifts.find(query, {"_id": 0}).sort("opened_at", -1).to_list(100)
     
     # Enrich each shift with sales summary
     for shift in shifts:
         if shift.get("status") == "closed" and not shift.get("summary"):
-            sales = await db.sales.find(
+            sales = await database.sales.find(
                 {"shift_id": shift["id"], "company_id": current_user["company_id"]},
                 {"_id": 0}
             ).to_list(1000)
@@ -1784,8 +1927,9 @@ async def get_today_sales_summary(current_user: dict = Depends(get_current_user)
     today_start = datetime.now(timezone.utc).replace(hour=0, minute=0, second=0, microsecond=0)
     today_str = today_start.isoformat()
     
+    database = get_db()
     # Get today's sales
-    sales = await db.sales.find(
+    sales = await database.sales.find(
         {
             "company_id": current_user["company_id"],
             "created_at": {"$gte": today_str}
@@ -1806,7 +1950,6 @@ async def get_today_sales_summary(current_user: dict = Depends(get_current_user)
     total_transfer = sum(s['total'] for s in sales if s.get('payment_method') == 'transferencia')
     
     # Get best selling products today
-    database = get_db()
     product_sales = {}
     for sale in sales:
         sale_items = await database.sale_items.find(
