@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
 import api from '../lib/api';
 import { toast } from 'sonner';
@@ -11,9 +11,21 @@ export default function LoginPage() {
   const [name, setName] = useState('');
   const [companyName, setCompanyName] = useState('');
   const [showPassword, setShowPassword] = useState(false);
+  const [rememberMe, setRememberMe] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [resetStep, setResetStep] = useState(1); // 1: email, 2: code/new_pass
+  const [resetCode, setResetCode] = useState('');
+  const [newPassword, setNewPassword] = useState('');
   const navigate = useNavigate();
+
+  useEffect(() => {
+    const savedEmail = localStorage.getItem('rememberedEmail');
+    if (savedEmail) {
+      setEmail(savedEmail);
+      setRememberMe(true);
+    }
+  }, []);
 
   const handleLogin = async (e) => {
     e.preventDefault();
@@ -23,10 +35,44 @@ export default function LoginPage() {
       const res = await api.post('/auth/login', { email, password });
       localStorage.setItem('token', res.data.access_token);
       localStorage.setItem('user', JSON.stringify(res.data.user));
+      
+      if (rememberMe) {
+        localStorage.setItem('rememberedEmail', email);
+      } else {
+        localStorage.removeItem('rememberedEmail');
+      }
+
       toast.success('¡Bienvenido de nuevo!');
       navigate('/dashboard');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al iniciar sesión');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleForgotPassword = async (e) => {
+    e.preventDefault();
+    setLoading(true);
+    try {
+      if (resetStep === 1) {
+        await api.post('/auth/forgot-password', { email });
+        toast.success('Se ha enviado un código a tu correo');
+        setResetStep(2);
+      } else {
+        await api.post('/auth/reset-password', { 
+          email, 
+          code: resetCode, 
+          new_password: newPassword 
+        });
+        toast.success('Contraseña actualizada con éxito');
+        setTab('login');
+        setResetStep(1);
+        setResetCode('');
+        setNewPassword('');
+      }
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error al procesar solicitud');
     } finally {
       setLoading(false);
     }
@@ -131,6 +177,17 @@ export default function LoginPage() {
             </button>
           </div>
 
+          {tab === 'forgot' && (
+            <div className="mb-6 animate-fade-in">
+              <button 
+                onClick={() => setTab('login')}
+                className="text-xs font-bold text-indigo-600 flex items-center gap-1 hover:underline"
+              >
+                <ArrowRight size={12} className="rotate-180" /> Volver al login
+              </button>
+            </div>
+          )}
+
           <div className="mb-8">
             <button
               type="button"
@@ -187,6 +244,24 @@ export default function LoginPage() {
                   </button>
                 </div>
               </div>
+              <div className="flex items-center justify-between px-1">
+                <label className="flex items-center gap-2 cursor-pointer">
+                  <input 
+                    type="checkbox" 
+                    className="w-4 h-4 rounded border-gray-300 text-indigo-600 focus:ring-indigo-500" 
+                    checked={rememberMe}
+                    onChange={(e) => setRememberMe(e.target.checked)}
+                  />
+                  <span className="text-xs font-medium text-gray-600">Recordar mi correo</span>
+                </label>
+                <button 
+                  type="button" 
+                  onClick={() => setTab('forgot')}
+                  className="text-xs font-bold text-indigo-600 hover:underline"
+                >
+                  ¿Olvidaste tu contraseña?
+                </button>
+              </div>
               <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 text-base">
                 {loading ? (
                   <span className="flex items-center gap-2">
@@ -199,7 +274,7 @@ export default function LoginPage() {
                 ) : 'Iniciar Sesión'}
               </button>
             </form>
-          ) : (
+          ) : tab === 'register' ? (
             <form onSubmit={handleRegister} className="space-y-4">
               <div>
                 <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nombre Completo</label>
@@ -242,15 +317,59 @@ export default function LoginPage() {
                 />
               </div>
               <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 text-base">
-                {loading ? (
-                  <span className="flex items-center gap-2">
-                    <svg className="animate-spin h-4 w-4" viewBox="0 0 24 24">
-                      <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" fill="none"/>
-                      <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z"/>
-                    </svg>
-                    Cargando...
-                  </span>
-                ) : 'Crear Cuenta'}
+                {loading ? 'Cargando...' : 'Crear Cuenta'}
+              </button>
+            </form>
+          ) : (
+            <form onSubmit={handleForgotPassword} className="space-y-4 animate-fade-in">
+              <div className="bg-indigo-50 p-4 rounded-2xl mb-4">
+                <p className="text-xs text-indigo-700 leading-relaxed">
+                  {resetStep === 1 
+                    ? 'Ingresa tu correo electrónico y te enviaremos un código de verificación.' 
+                    : 'Ingresa el código enviado a tu correo y tu nueva contraseña.'}
+                </p>
+              </div>
+              
+              {resetStep === 1 ? (
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1.5">Correo Electrónico</label>
+                  <input
+                    type="email"
+                    placeholder="correo@empresa.com"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
+                    required
+                  />
+                </div>
+              ) : (
+                <>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Código de Verificación</label>
+                    <input
+                      type="text"
+                      placeholder="6 dígitos"
+                      value={resetCode}
+                      onChange={(e) => setResetCode(e.target.value)}
+                      required
+                      className="text-center tracking-[0.5em] text-lg font-bold"
+                      maxLength={6}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-semibold text-gray-700 mb-1.5">Nueva Contraseña</label>
+                    <input
+                      type="password"
+                      placeholder="••••••••"
+                      value={newPassword}
+                      onChange={(e) => setNewPassword(e.target.value)}
+                      required
+                    />
+                  </div>
+                </>
+              )}
+              
+              <button type="submit" disabled={loading} className="btn-primary w-full justify-center py-3 text-base">
+                {loading ? 'Procesando...' : resetStep === 1 ? 'Enviar Código' : 'Restablecer Contraseña'}
               </button>
             </form>
           )}

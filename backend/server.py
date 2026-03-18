@@ -180,6 +180,14 @@ class Token(BaseModel):
     token_type: str
     user: User
 
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    email: EmailStr
+    code: str
+    new_password: str
+
 class Product(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
@@ -273,6 +281,7 @@ class RawMaterial(BaseModel):
     supplier: Optional[str] = None
     lote: Optional[str] = None
     vencimiento: Optional[str] = None
+    warehouse_id: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class RawMaterialCreate(BaseModel):
@@ -285,6 +294,7 @@ class RawMaterialCreate(BaseModel):
     supplier: Optional[str] = None
     lote: Optional[str] = None
     vencimiento: Optional[str] = None
+    warehouse_id: Optional[str] = None
 
 class RawMaterialUpdate(BaseModel):
     name: Optional[str] = None
@@ -296,6 +306,7 @@ class RawMaterialUpdate(BaseModel):
     supplier: Optional[str] = None
     lote: Optional[str] = None
     vencimiento: Optional[str] = None
+    warehouse_id: Optional[str] = None
 
 class ProductionOrder(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -655,6 +666,61 @@ async def update_me(update_data: UserUpdate, current_user: dict = Depends(get_cu
     if isinstance(user_dict['created_at'], str):
         user_dict['created_at'] = datetime.fromisoformat(user_dict['created_at'])
     return User(**user_dict)
+
+@api_router.post("/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    user = await db.users.find_one({"email": req.email})
+    if not user:
+        # We don't want to reveal if a user exists, but for this demo/app we might just return success
+        return {"message": "Si el correo está registrado, recibirás un código."}
+    
+    # Generate 6-digit code
+    import random
+    code = ''.join([str(random.randint(0, 9)) for _ in range(6)])
+    expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
+    
+    # Save code to DB
+    await db.password_resets.update_one(
+        {"email": req.email},
+        {"$set": {"code": code, "expiry": expiry.isoformat()}},
+        upsert=True
+    )
+    
+    # Send email
+    html_content = f"""
+    <div style="font-family: Arial, sans-serif; padding: 20px; color: #333;">
+        <h2 style="color: #4F46E5;">Recuperación de Contraseña</h2>
+        <p>Has solicitado restablecer tu contraseña en CheckAdmin.</p>
+        <p>Tu código de verificación es:</p>
+        <div style="background: #f3f4f6; padding: 15px; font-size: 24px; font-weight: bold; text-align: center; letter-spacing: 5px; border-radius: 8px;">
+            {code}
+        </div>
+        <p>Este código vencerá en 15 minutos.</p>
+        <p>Si no solicitaste esto, puedes ignorar este correo.</p>
+    </div>
+    """
+    await send_email_async(req.email, "Código de Recuperación - CheckAdmin", html_content)
+    
+    return {"message": "Código enviado con éxito"}
+
+@api_router.post("/auth/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    reset_doc = await db.password_resets.find_one({"email": req.email})
+    if not reset_doc or reset_doc['code'] != req.code:
+        raise HTTPException(status_code=400, detail="Código inválido.")
+    
+    expiry = datetime.fromisoformat(reset_doc['expiry'])
+    if datetime.now(timezone.utc) > expiry.replace(tzinfo=timezone.utc):
+        raise HTTPException(status_code=400, detail="El código ha vencido.")
+    
+    # Update password
+    hashed_pwd = hash_password(req.new_password)
+    await db.users.update_one({"email": req.email}, {"$set": {"password": hashed_pwd}})
+    
+    # Delete reset code
+    await db.password_resets.delete_one({"email": req.email})
+    
+    return {"message": "Contraseña actualizada con éxito"}
 
 # ==================== DASHBOARD ====================
 
@@ -1316,6 +1382,50 @@ async def delete_customer(customer_id: str, current_user: dict = Depends(get_cur
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Customer not found")
     return {"message": "Customer deleted"}
+
+@api_router.get("/employees", response_model=List[Employee])
+async def get_employees(current_user: dict = Depends(get_current_user)):
+    employees = await db.employees.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    for e in employees:
+        if isinstance(e['created_at'], str):
+            e['created_at'] = datetime.fromisoformat(e['created_at'])
+    return employees
+
+@api_router.post("/employees", response_model=Employee)
+async def create_employee(employee_data: EmployeeCreate, current_user: dict = Depends(get_current_user)):
+    employee = Employee(
+        company_id=current_user["company_id"],
+        daily_rate=employee_data.base_salary / 30,  # Calculate daily rate
+        **employee_data.model_dump()
+    )
+    employee_dict = employee.model_dump()
+    employee_dict['created_at'] = employee_dict['created_at'].isoformat()
+    await db.employees.insert_one(employee_dict)
+    return employee
+
+@api_router.put("/employees/{employee_id}", response_model=Employee)
+async def update_employee(employee_id: str, employee_data: EmployeeCreate, current_user: dict = Depends(get_current_user)):
+    update_data = employee_data.model_dump()
+    update_data['daily_rate'] = update_data['base_salary'] / 30
+    
+    await db.employees.update_one(
+        {"id": employee_id, "company_id": current_user["company_id"]},
+        {"$set": update_data}
+    )
+    
+    employee_dict = await db.employees.find_one({"id": employee_id}, {"_id": 0})
+    if not employee_dict:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    if isinstance(employee_dict['created_at'], str):
+        employee_dict['created_at'] = datetime.fromisoformat(employee_dict['created_at'])
+    return Employee(**employee_dict)
+
+@api_router.delete("/employees/{employee_id}")
+async def delete_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
+    result = await db.employees.delete_one({"id": employee_id, "company_id": current_user["company_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Employee not found")
+    return {"message": "Employee deleted"}
 
 # ==================== FINANCE AGGREGATE ENDPOINTS ====================
 

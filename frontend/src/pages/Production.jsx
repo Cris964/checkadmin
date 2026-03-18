@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../lib/api';
 import { toast } from 'sonner';
-import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign } from 'lucide-react';
+import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2 } from 'lucide-react';
 
 export default function Production() {
   const [tab, setTab] = useState('materials');
@@ -14,11 +14,12 @@ export default function Production() {
   const [showRecipeForm, setShowRecipeForm] = useState(false);
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [showMaterialForm, setShowMaterialForm] = useState(false);
+  const [editingMaterial, setEditingMaterial] = useState(null);
   const [selectedRecipe, setSelectedRecipe] = useState('');
   const [orderQuantity, setOrderQuantity] = useState(1);
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
   const [expandedOrder, setExpandedOrder] = useState(null);
-  const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '' });
+  const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' });
   const [recipeForm, setRecipeForm] = useState({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', ingredients: [] });
   const [newIngredient, setNewIngredient] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg' });
 
@@ -96,16 +97,42 @@ export default function Production() {
 
   const createMaterial = async (e) => {
     e.preventDefault();
-    await api.post('/raw-materials', { 
+    const payload = { 
       ...materialForm, 
       current_stock: parseFloat(materialForm.current_stock), 
       min_stock: parseFloat(materialForm.min_stock), 
       cost_per_unit: parseFloat(materialForm.cost_per_unit) 
-    });
+    };
+
+    if (editingMaterial) {
+      await api.put(`/raw-materials/${editingMaterial.id}`, payload);
+      toast.success('Materia prima actualizada');
+    } else {
+      await api.post('/raw-materials', payload);
+      toast.success('Materia prima registrada');
+    }
+    
     setShowMaterialForm(false); 
-    setMaterialForm({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '' }); 
+    setEditingMaterial(null);
+    setMaterialForm({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' }); 
     loadData();
-    toast.success('Materia prima registrada');
+  };
+
+  const handleEditMaterial = (m) => {
+    setEditingMaterial(m);
+    setMaterialForm({
+      name: m.name,
+      sku: m.sku,
+      current_stock: m.current_stock,
+      min_stock: m.min_stock,
+      unit: m.unit,
+      cost_per_unit: m.cost_per_unit,
+      supplier: m.supplier || '',
+      lote: m.lote || '',
+      vencimiento: m.vencimiento || '',
+      warehouse_id: m.warehouse_id || ''
+    });
+    setShowMaterialForm(true);
   };
 
   const stages = ['montada', 'alistamiento', 'procesamiento', 'terminada'];
@@ -330,12 +357,25 @@ export default function Production() {
             <div key={m.id} className="data-row gap-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
               <Boxes size={22} className="text-primary-400 flex-shrink-0" />
               <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-4 py-3">
-                <div className="col-span-1 md:col-span-2"><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Nombre</p><p className="font-bold text-sm text-gray-800">{m.name}</p><p className="text-xs text-gray-500">{m.sku}</p></div>
+                <div className="col-span-1 md:col-span-2">
+                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Nombre</p>
+                  <p className="font-bold text-sm text-gray-800">{m.name}</p>
+                  <p className="text-xs text-gray-500">{m.sku}</p>
+                  <p className="text-[10px] text-blue-500 font-medium">
+                    <Home size={10} className="inline mr-1" />
+                    {m.warehouse_id ? (warehouses.find(w => w.id === m.warehouse_id)?.name || 'Bodega desconocida') : 'Sin bodega'}
+                  </p>
+                </div>
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Stock</p><p className={`font-bold text-sm ${m.current_stock <= m.min_stock ? 'text-red-600' : 'text-green-600'}`}>{m.current_stock} {m.unit}</p></div>
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Lote</p><p className="font-medium text-xs text-gray-700">{m.lote || '—'}</p></div>
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Vence</p><p className="font-medium text-xs text-gray-700">{m.vencimiento || '—'}</p></div>
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo/U</p><p className="font-bold text-sm text-primary-600">{fmt(m.cost_per_unit)}</p></div>
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Proveedor</p><p className="font-medium text-xs text-gray-600 truncate">{m.supplier || '—'}</p></div>
+                <div className="flex items-center justify-end">
+                  <button onClick={() => handleEditMaterial(m)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-primary-600 transition-colors">
+                    <Edit2 size={16} />
+                  </button>
+                </div>
               </div>
             </div>
           ))}
@@ -506,7 +546,7 @@ export default function Production() {
       {showMaterialForm && (
         <div className="modal-overlay" onClick={() => setShowMaterialForm(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">Nueva Materia Prima</h3><button onClick={() => setShowMaterialForm(false)}><X size={20} /></button></div>
+            <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">{editingMaterial ? 'Editar Materia Prima' : 'Nueva Materia Prima'}</h3><button onClick={() => { setShowMaterialForm(false); setEditingMaterial(null); }}><X size={20} /></button></div>
             <form onSubmit={createMaterial} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-sm font-semibold mb-1">Nombre</label><input value={materialForm.name} onChange={(e) => setMaterialForm({ ...materialForm, name: e.target.value })} required /></div>
@@ -527,7 +567,20 @@ export default function Production() {
                 <div><label className="block text-sm font-semibold mb-1">Lote</label><input value={materialForm.lote} onChange={(e) => setMaterialForm({ ...materialForm, lote: e.target.value })} placeholder="Ej: L-2024-001" /></div>
                 <div><label className="block text-sm font-semibold mb-1">Vencimiento</label><input type="date" value={materialForm.vencimiento} onChange={(e) => setMaterialForm({ ...materialForm, vencimiento: e.target.value })} /></div>
               </div>
-              <button type="submit" className="btn-primary w-full justify-center py-2.5">Registrar Materia Prima</button>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Bodega</label>
+                <select 
+                  value={materialForm.warehouse_id} 
+                  onChange={(e) => setMaterialForm({ ...materialForm, warehouse_id: e.target.value })}
+                  className="w-full"
+                >
+                  <option value="">Seleccionar bodega...</option>
+                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                </select>
+              </div>
+              <button type="submit" className="btn-primary w-full justify-center py-2.5">
+                {editingMaterial ? 'Actualizar Materia Prima' : 'Registrar Materia Prima'}
+              </button>
             </form>
           </div>
         </div>
