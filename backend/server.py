@@ -242,20 +242,22 @@ class Recipe(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     company_id: str
-    name: str
+    cliente: Optional[str] = None
     description: Optional[str] = None
     output_product_id: str
     output_product_name: str
     expected_quantity: int
+    image_url: Optional[str] = None
     ingredients: List[RecipeIngredient] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class RecipeCreate(BaseModel):
-    name: str
+    cliente: Optional[str] = None
     description: Optional[str] = None
     output_product_id: str
     output_product_name: str
     expected_quantity: int
+    image_url: Optional[str] = None
     ingredients: List[RecipeIngredient]
 
 class RawMaterial(BaseModel):
@@ -269,6 +271,8 @@ class RawMaterial(BaseModel):
     unit: str  # kg, g, L, ml, unidades
     cost_per_unit: float
     supplier: Optional[str] = None
+    lote: Optional[str] = None
+    vencimiento: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class RawMaterialCreate(BaseModel):
@@ -279,6 +283,8 @@ class RawMaterialCreate(BaseModel):
     unit: str
     cost_per_unit: float
     supplier: Optional[str] = None
+    lote: Optional[str] = None
+    vencimiento: Optional[str] = None
 
 class RawMaterialUpdate(BaseModel):
     name: Optional[str] = None
@@ -288,6 +294,8 @@ class RawMaterialUpdate(BaseModel):
     unit: Optional[str] = None
     cost_per_unit: Optional[float] = None
     supplier: Optional[str] = None
+    lote: Optional[str] = None
+    vencimiento: Optional[str] = None
 
 class ProductionOrder(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -295,12 +303,15 @@ class ProductionOrder(BaseModel):
     company_id: str
     recipe_id: str
     recipe_name: str
-    stage: str = "montada"  # montada, alistada, procesada, terminada
+    stage: str = "montada"  # montada, alistamiento, procesamiento, terminada
     created_by: str
     warehouse_person: Optional[str] = None
     operator_person: Optional[str] = None
+    quantity: int = 1
     actual_output: Optional[int] = None
     observations: Optional[str] = None
+    novedades: Optional[str] = None
+    warehouse_id: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -309,6 +320,8 @@ class ProductionOrder(BaseModel):
 class ProductionOrderCreate(BaseModel):
     recipe_id: str
     recipe_name: str
+    quantity: int = 1
+    warehouse_id: Optional[str] = None
     start_time: Optional[str] = None
 
 class ProductionOrderUpdate(BaseModel):
@@ -317,6 +330,7 @@ class ProductionOrderUpdate(BaseModel):
     operator_person: Optional[str] = None
     actual_output: Optional[int] = None
     observations: Optional[str] = None
+    novedades: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
 
@@ -1124,51 +1138,12 @@ async def get_payroll(
         if "created_at" not in query: query["created_at"] = {}
         query["created_at"]["$lte"] = end_date + "T23:59:59"
         
-    payroll = await db.payroll.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
-    for p in payroll:
-        if isinstance(p['created_at'], str):
-            p['created_at'] = datetime.fromisoformat(p['created_at'])
-    return payroll
-
-@api_router.get("/employees", response_model=List[Employee])
-async def get_employees(current_user: dict = Depends(get_current_user)):
-    employees = await db.employees.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
-    for e in employees:
-        if isinstance(e['created_at'], str):
-            e['created_at'] = datetime.fromisoformat(e['created_at'])
-    return employees
-
-@api_router.post("/employees", response_model=Employee)
-async def create_employee(employee_data: EmployeeCreate, current_user: dict = Depends(get_current_user)):
-    # Calculate daily_rate from base_salary (assuming 30 days per month)
-    daily_rate = employee_data.base_salary / 30
-    
-    employee = Employee(
-        company_id=current_user["company_id"], 
-        daily_rate=daily_rate,
-        **employee_data.model_dump()
-    )
-    employee_dict = employee.model_dump()
-    employee_dict['created_at'] = employee_dict['created_at'].isoformat()
-    await db.employees.insert_one(employee_dict)
-    return employee
-
-@api_router.delete("/employees/{employee_id}")
-async def delete_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.employees.delete_one({"id": employee_id, "company_id": current_user["company_id"]})
-    if result.deleted_count == 0:
-        raise HTTPException(status_code=404, detail="Employee not found")
-    return {"message": "Employee deleted"}
-
-# ==================== PAYROLL ====================
-
-@api_router.get("/payroll")
-async def get_payroll(current_user: dict = Depends(get_current_user)):
-    liquidations = await db.payroll.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    liquidations = await db.payroll.find(query, {"_id": 0}).sort("created_at", -1).to_list(1000)
     result = []
     for l in liquidations:
-        if isinstance(l.get('created_at'), str):
+        if isinstance(l['created_at'], str):
             l['created_at'] = datetime.fromisoformat(l['created_at'])
+        
         # Handle legacy data by providing defaults for missing fields
         legacy_defaults = {
             'extra_hours': 0,

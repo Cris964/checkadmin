@@ -39,8 +39,8 @@ export default function Payroll() {
       api.get('/payroll', { params }),
       api.get('/constants/colombian-data')
     ]);
-    setEmployees(e.data); 
-    setLiquidations(l.data);
+    setEmployees(Array.isArray(e.data) ? e.data : (e.data?.data || [])); 
+    setLiquidations(Array.isArray(l.data) ? l.data : (l.data?.data || []));
     setColombianData(c.data);
   };
   useEffect(() => { loadData(); }, [filters]);
