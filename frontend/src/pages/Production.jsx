@@ -260,6 +260,21 @@ export default function Production() {
   const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' });
   const [recipeForm, setRecipeForm] = useState({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', ingredients: [] });
   const [newIngredient, setNewIngredient] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg' });
+  const [uploading, setUploading] = useState(false);
+  const [selectedRecipeFile, setSelectedRecipeFile] = useState(null);
+  const [selectedMaterialFile, setSelectedMaterialFile] = useState(null);
+
+  const handleRecipeFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedRecipeFile(e.target.files[0]);
+    }
+  };
+
+  const handleMaterialFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedMaterialFile(e.target.files[0]);
+    }
+  };
 
   const loadData = async () => {
     const [o, r, m, p, w] = await Promise.all([
@@ -298,16 +313,39 @@ export default function Production() {
 
   const createRecipe = async (e) => {
     e.preventDefault();
-    if (editingRecipe) {
-      await api.put(`/recipes/${editingRecipe.id}`, { ...recipeForm, expected_quantity: parseInt(recipeForm.expected_quantity) });
-      toast.success('Receta actualizada correctamente');
-    } else {
-      await api.post('/recipes', { ...recipeForm, expected_quantity: parseInt(recipeForm.expected_quantity) });
-      toast.success('Receta/Kit creado correctamente');
+    setUploading(true);
+    try {
+      let recipeId = editingRecipe?.id;
+      const payload = { ...recipeForm, expected_quantity: parseInt(recipeForm.expected_quantity) };
+      
+      if (editingRecipe) {
+        await api.put(`/recipes/${editingRecipe.id}`, payload);
+        toast.success('Receta actualizada correctamente');
+      } else {
+        const res = await api.post('/recipes', payload);
+        recipeId = res.data.id;
+        toast.success('Receta/Kit creado correctamente');
+      }
+
+      // Upload image if selected
+      if (selectedRecipeFile && recipeId) {
+        const formData = new FormData();
+        formData.append('file', selectedRecipeFile);
+        await api.post(`/upload/recipe-image/${recipeId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+
+      setShowRecipeForm(false); 
+      setEditingRecipe(null); 
+      setSelectedRecipeFile(null);
+      setRecipeForm({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', ingredients: [] }); 
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error al guardar receta');
+    } finally {
+      setUploading(false);
     }
-    setShowRecipeForm(false); setEditingRecipe(null); 
-    setRecipeForm({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', ingredients: [] }); 
-    loadData();
   };
 
   const handleEditRecipe = (recipe) => {
@@ -332,25 +370,45 @@ export default function Production() {
 
   const createMaterial = async (e) => {
     e.preventDefault();
+    setUploading(true);
     const payload = { 
       ...materialForm, 
       current_stock: parseFloat(materialForm.current_stock), 
       min_stock: parseFloat(materialForm.min_stock), 
-      cost_per_unit: parseFloat(materialForm.cost_per_unit) 
+      cost_per_unit: parseFloat(materialForm.cost_per_unit),
+      warehouse_id: materialForm.warehouse_id || null
     };
 
-    if (editingMaterial) {
-      await api.put(`/raw-materials/${editingMaterial.id}`, payload);
-      toast.success('Materia prima actualizada');
-    } else {
-      await api.post('/raw-materials', payload);
-      toast.success('Materia prima registrada');
+    try {
+      let materialId = editingMaterial?.id;
+      if (editingMaterial) {
+        await api.put(`/raw-materials/${editingMaterial.id}`, payload);
+        toast.success('Materia prima actualizada');
+      } else {
+        const res = await api.post('/raw-materials', payload);
+        materialId = res.data.id;
+        toast.success('Materia prima registrada');
+      }
+
+      // Upload image if selected
+      if (selectedMaterialFile && materialId) {
+        const formData = new FormData();
+        formData.append('file', selectedMaterialFile);
+        await api.post(`/upload/material-image/${materialId}`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+      
+      setShowMaterialForm(false); 
+      setEditingMaterial(null);
+      setSelectedMaterialFile(null);
+      setMaterialForm({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' }); 
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error al guardar materia prima');
+    } finally {
+      setUploading(false);
     }
-    
-    setShowMaterialForm(false); 
-    setEditingMaterial(null);
-    setMaterialForm({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' }); 
-    loadData();
   };
 
   const handleEditMaterial = (m) => {
@@ -536,7 +594,8 @@ export default function Production() {
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Vence</p><p className="font-medium text-xs text-gray-700">{m.vencimiento || '—'}</p></div>
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo/U</p><p className="font-bold text-sm text-primary-600">{fmt(m.cost_per_unit)}</p></div>
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Proveedor</p><p className="font-medium text-xs text-gray-600 truncate">{m.supplier || '—'}</p></div>
-                <div className="flex items-center justify-end">
+                <div className="flex items-center justify-end gap-2">
+                  {m.image_url && <img src={m.image_url} alt={m.name} className="w-8 h-8 rounded object-cover border border-gray-200" />}
                   <button onClick={() => handleEditMaterial(m)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-primary-600 transition-colors">
                     <Edit2 size={16} />
                   </button>
@@ -663,13 +722,19 @@ export default function Production() {
                   />
                 </div>
                 <div className="col-span-2">
-                  <label className="block text-sm font-semibold mb-1">URL Foto Producto</label>
-                  <input 
-                    className="w-full p-2 border border-gray-200 rounded-lg"
-                    value={recipeForm.image_url} 
-                    onChange={(e) => setRecipeForm({ ...recipeForm, image_url: e.target.value })} 
-                    placeholder="https://..." 
-                  />
+                  <label className="block text-sm font-semibold mb-1">Imagen del Producto / Receta</label>
+                  <div className="flex items-center gap-3 p-2 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                    <input type="file" accept="image/*" onChange={handleRecipeFileChange} className="hidden" id="recipe-image-upload" />
+                    <label htmlFor="recipe-image-upload" className="btn-secondary text-xs cursor-pointer py-1.5 px-3">
+                      {selectedRecipeFile ? 'Cambiar Imagen' : 'Seleccionar Archivo'}
+                    </label>
+                    {selectedRecipeFile ? (
+                      <span className="text-xs text-gray-600 truncate flex-1">{selectedRecipeFile.name}</span>
+                    ) : (
+                      <span className="text-xs text-gray-400 flex-1">{recipeForm.image_url ? 'Imagen actual cargada' : 'No hay archivo seleccionado'}</span>
+                    )}
+                    {uploading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>}
+                  </div>
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-semibold mb-1">Descripción</label>
@@ -742,6 +807,21 @@ export default function Production() {
                   <option value="">Seleccionar bodega...</option>
                   {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                 </select>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Imagen de Materia Prima</label>
+                <div className="flex items-center gap-3 p-2 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                  <input type="file" accept="image/*" onChange={handleMaterialFileChange} className="hidden" id="material-image-upload" />
+                  <label htmlFor="material-image-upload" className="btn-secondary text-xs cursor-pointer py-1.5 px-3">
+                    {selectedMaterialFile ? 'Cambiar Imagen' : 'Seleccionar Archivo'}
+                  </label>
+                  {selectedMaterialFile ? (
+                    <span className="text-xs text-gray-600 truncate flex-1">{selectedMaterialFile.name}</span>
+                  ) : (
+                    <span className="text-xs text-gray-400 flex-1">{editingMaterial?.image_url ? 'Imagen actual conservada' : 'Opcional'}</span>
+                  )}
+                  {uploading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>}
+                </div>
               </div>
               <button type="submit" className="btn-primary w-full justify-center py-2.5">
                 {editingMaterial ? 'Actualizar Materia Prima' : 'Registrar Materia Prima'}

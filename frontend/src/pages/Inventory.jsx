@@ -35,29 +35,56 @@ export default function Inventory() {
     } catch (e) { console.error(e); }
   };
 
-  const handleSubmitProduct = async (e) => {
-    e.preventDefault();
-    const data = {
-      ...form,
-      cost_buy: parseFloat(form.cost_buy),
-      cost_sell: parseFloat(form.cost_sell),
-      stock_min: parseInt(form.stock_min),
-      stock_current: parseInt(form.stock_current),
-      warehouse_id: form.warehouse_id || null
-    };
-    try {
-      if (editingProduct) {
-        await api.put(`/products/${editingProduct.id}`, data);
-      } else {
-        await api.post('/products', data);
+    const [uploading, setUploading] = useState(false);
+    const [selectedFile, setSelectedFile] = useState(null);
+
+    const handleFileChange = (e) => {
+      if (e.target.files && e.target.files[0]) {
+        setSelectedFile(e.target.files[0]);
       }
-      setShowForm(false);
-      setEditingProduct(null);
-      setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '' });
-      loadData();
-      toast.success(editingProduct ? 'Producto actualizado' : 'Producto creado');
-    } catch (e) { toast.error(e.response?.data?.detail || 'Error al guardar producto'); }
-  };
+    };
+
+    const handleSubmitProduct = async (e) => {
+      e.preventDefault();
+      setUploading(true);
+      const data = {
+        ...form,
+        cost_buy: parseFloat(form.cost_buy),
+        cost_sell: parseFloat(form.cost_sell),
+        stock_min: parseInt(form.stock_min),
+        stock_current: parseInt(form.stock_current),
+        warehouse_id: form.warehouse_id || null
+      };
+      try {
+        let productId = editingProduct?.id;
+        if (editingProduct) {
+          await api.put(`/products/${editingProduct.id}`, data);
+        } else {
+          const res = await api.post('/products', data);
+          productId = res.data.id;
+        }
+
+        // Upload image if selected
+        if (selectedFile && productId) {
+          const formData = new FormData();
+          formData.append('file', selectedFile);
+          await api.post(`/upload/product-image/${productId}`, formData, {
+            headers: { 'Content-Type': 'multipart/form-data' }
+          });
+        }
+
+        setShowForm(false);
+        setEditingProduct(null);
+        setSelectedFile(null);
+        setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '' });
+        loadData();
+        toast.success(editingProduct ? 'Producto actualizado' : 'Producto creado');
+      } catch (e) { 
+        toast.error(e.response?.data?.detail || 'Error al guardar producto'); 
+      } finally {
+        setUploading(false);
+      }
+    };
 
   const editProduct = (p) => {
     setEditingProduct(p);
@@ -262,6 +289,24 @@ export default function Inventory() {
                     {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                   </select>
                 </div>
+              </div>
+              <div>
+                <label className="block text-sm font-semibold mb-1">Imagen del Producto</label>
+                <div className="flex items-center gap-3 p-2 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                  <input type="file" accept="image/*" onChange={handleFileChange} className="hidden" id="product-image-upload" />
+                  <label htmlFor="product-image-upload" className="btn-secondary text-xs cursor-pointer py-1.5 px-3">
+                    {selectedFile ? 'Cambiar Imagen' : 'Seleccionar Archivo'}
+                  </label>
+                  {selectedFile ? (
+                    <span className="text-xs text-gray-600 truncate flex-1">{selectedFile.name}</span>
+                  ) : (
+                    <span className="text-xs text-gray-400 flex-1">Formatos: JPG, PNG, WEBP</span>
+                  )}
+                  {uploading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>}
+                </div>
+                {editingProduct?.image_url && !selectedFile && (
+                  <p className="text-[10px] text-gray-500 mt-1">El producto ya tiene una imagen. Subir una nueva la reemplazará.</p>
+                )}
               </div>
               <button type="submit" className="btn-primary w-full justify-center py-2.5 mt-2">{editingProduct ? 'Guardar Cambios' : 'Crear Producto'}</button>
             </form>

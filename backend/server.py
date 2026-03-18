@@ -865,7 +865,7 @@ async def create_product(product_data: ProductCreate, current_user: dict = Depen
 
 @api_router.put("/products/{product_id}", response_model=Product)
 async def update_product(product_id: str, product_data: ProductUpdate, current_user: dict = Depends(get_current_user)):
-    update_fields = {k: v for k, v in product_data.model_dump().items() if v is not None}
+    update_fields = product_data.model_dump(exclude_unset=True)
     
     database = get_db()
     # Recalculate profit if costs changed
@@ -959,7 +959,7 @@ async def create_raw_material(material_data: RawMaterialCreate, current_user: di
 
 @api_router.put("/raw-materials/{material_id}", response_model=RawMaterial)
 async def update_raw_material(material_id: str, material_data: RawMaterialUpdate, current_user: dict = Depends(get_current_user)):
-    update_fields = {k: v for k, v in material_data.model_dump().items() if v is not None}
+    update_fields = material_data.model_dump(exclude_unset=True)
     
     database = get_db()
     if update_fields:
@@ -1078,7 +1078,7 @@ async def create_production_order(order_data: ProductionOrderCreate, current_use
 
 @api_router.put("/production-orders/{order_id}", response_model=ProductionOrder)
 async def update_production_order(order_id: str, order_data: ProductionOrderUpdate, current_user: dict = Depends(get_current_user)):
-    update_fields = {k: v for k, v in order_data.model_dump().items() if v is not None}
+    update_fields = order_data.model_dump(exclude_unset=True)
     update_fields['updated_at'] = datetime.now(timezone.utc).isoformat()
     
     database = get_db()
@@ -1140,7 +1140,7 @@ async def advance_production_order(order_id: str, data: ProductionOrderAdvance, 
             qty_to_add = data.actual_output if data.actual_output is not None else order['quantity']
             await database.products.update_one(
                 {"id": recipe['output_product_id'], "company_id": current_user["company_id"]},
-                {"$inc": {"stock": qty_to_add}}
+                {"$inc": {"stock_current": qty_to_add}}
             )
             
     await database.production_orders.update_one(
@@ -1570,46 +1570,50 @@ async def delete_employee(employee_id: str, current_user: dict = Depends(get_cur
         raise HTTPException(status_code=404, detail="Employee not found")
     return {"message": "Employee deleted"}
 
-@api_router.post("/production-orders/{order_id}/advance")
-async def advance_production_order(order_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+
+# ==================== ADDITIONAL FILE UPLOADS ====================
+
+@api_router.post("/upload/recipe-image/{recipe_id}")
+async def upload_recipe_image(recipe_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
+    
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    filename = f"recipe_{recipe_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = UPLOADS_DIR / filename
+    
+    async with aiofiles.open(filepath, 'wb') as f:
+        content = await file.read()
+        await f.write(content)
+    
     database = get_db()
-    order = await database.production_orders.find_one({"id": order_id, "company_id": current_user["company_id"]}, {"_id": 0})
-    if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+    image_url = f"/api/uploads/{filename}"
+    await database.recipes.update_one(
+        {"id": recipe_id, "company_id": current_user["company_id"]},
+        {"$set": {"image_url": image_url}}
+    )
+    return {"image_url": image_url, "filename": filename}
+
+@api_router.post("/upload/material-image/{material_id}")
+async def upload_material_image(material_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if not file.content_type.startswith("image/"):
+        raise HTTPException(status_code=400, detail="File must be an image")
     
-    current_stage = order['stage']
-    next_stage = data.get('next_stage')
+    ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
+    filename = f"material_{material_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    filepath = UPLOADS_DIR / filename
     
-    update_fields = {
-        "stage": next_stage,
-        "updated_at": datetime.now(timezone.utc).isoformat()
-    }
+    async with aiofiles.open(filepath, 'wb') as f:
+        content = await file.read()
+        await f.write(content)
     
-    if current_stage == 'montada' and next_stage == 'alistamiento':
-        update_fields['checklist_alistamiento'] = data.get('checklist', [])
-        update_fields['responsable_alistamiento'] = data.get('responsable')
-        
-    elif current_stage == 'alistamiento' and next_stage == 'procesamiento':
-        # DEDUCT STOCK
-        recipe = await database.recipes.find_one({"id": order['recipe_id']}, {"_id": 0})
-        if recipe:
-            for ing in recipe.get('ingredients', []):
-                required_qty = ing['quantity'] * order['quantity']
-                await database.raw_materials.update_one(
-                    {"id": ing['raw_material_id'], "company_id": current_user["company_id"]},
-                    {"$inc": {"current_stock": -required_qty}}
-                )
-        update_fields['checklist_alistamiento'] = data.get('checklist', order.get('checklist_alistamiento', []))
-        update_fields['responsable_alistamiento'] = data.get('responsable', order.get('responsable_alistamiento'))
-        
-    elif current_stage == 'procesamiento' and next_stage == 'terminada':
-        update_fields['checklist_procesamiento'] = data.get('checklist', [])
-        update_fields['responsable_procesamiento'] = data.get('responsable')
-        update_fields['actual_output'] = data.get('actual_output', order.get('quantity'))
-        update_fields['end_time'] = datetime.now(timezone.utc).isoformat()
-    
-    await database.production_orders.update_one({"id": order_id}, {"$set": update_fields})
-    return {"message": f"Order advanced to {next_stage}"}
+    database = get_db()
+    image_url = f"/api/uploads/{filename}"
+    await database.raw_materials.update_one(
+        {"id": material_id, "company_id": current_user["company_id"]},
+        {"$set": {"image_url": image_url}}
+    )
+    return {"image_url": image_url, "filename": filename}
 
 # ==================== FINANCE AGGREGATE ENDPOINTS ====================
 
