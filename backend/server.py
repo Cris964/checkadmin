@@ -325,6 +325,10 @@ class ProductionOrder(BaseModel):
     warehouse_id: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    checklist_alistamiento: List[dict] = Field(default_factory=list) # [{material_id, name, checked}]
+    checklist_procesamiento: List[dict] = Field(default_factory=list) # [{task, checked}]
+    responsable_alistamiento: Optional[str] = None
+    responsable_procesamiento: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
     updated_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -680,7 +684,8 @@ async def forgot_password(req: ForgotPasswordRequest):
     expiry = datetime.now(timezone.utc) + timedelta(minutes=15)
     
     # Save code to DB
-    await db.password_resets.update_one(
+    database = get_db()
+    await database.password_resets.update_one(
         {"email": req.email},
         {"$set": {"code": code, "expiry": expiry.isoformat()}},
         upsert=True
@@ -705,7 +710,8 @@ async def forgot_password(req: ForgotPasswordRequest):
 
 @api_router.post("/auth/reset-password")
 async def reset_password(req: ResetPasswordRequest):
-    reset_doc = await db.password_resets.find_one({"email": req.email})
+    database = get_db()
+    reset_doc = await database.password_resets.find_one({"email": req.email})
     if not reset_doc or reset_doc['code'] != req.code:
         raise HTTPException(status_code=400, detail="Código inválido.")
     
@@ -715,10 +721,10 @@ async def reset_password(req: ResetPasswordRequest):
     
     # Update password
     hashed_pwd = hash_password(req.new_password)
-    await db.users.update_one({"email": req.email}, {"$set": {"password": hashed_pwd}})
+    await database.users.update_one({"email": req.email}, {"$set": {"password": hashed_pwd}})
     
     # Delete reset code
-    await db.password_resets.delete_one({"email": req.email})
+    await database.password_resets.delete_one({"email": req.email})
     
     return {"message": "Contraseña actualizada con éxito"}
 
@@ -1385,7 +1391,8 @@ async def delete_customer(customer_id: str, current_user: dict = Depends(get_cur
 
 @api_router.get("/employees", response_model=List[Employee])
 async def get_employees(current_user: dict = Depends(get_current_user)):
-    employees = await db.employees.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    database = get_db()
+    employees = await database.employees.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
     for e in employees:
         if isinstance(e['created_at'], str):
             e['created_at'] = datetime.fromisoformat(e['created_at'])
@@ -1393,6 +1400,7 @@ async def get_employees(current_user: dict = Depends(get_current_user)):
 
 @api_router.post("/employees", response_model=Employee)
 async def create_employee(employee_data: EmployeeCreate, current_user: dict = Depends(get_current_user)):
+    database = get_db()
     employee = Employee(
         company_id=current_user["company_id"],
         daily_rate=employee_data.base_salary / 30,  # Calculate daily rate
@@ -1400,20 +1408,21 @@ async def create_employee(employee_data: EmployeeCreate, current_user: dict = De
     )
     employee_dict = employee.model_dump()
     employee_dict['created_at'] = employee_dict['created_at'].isoformat()
-    await db.employees.insert_one(employee_dict)
+    await database.employees.insert_one(employee_dict)
     return employee
 
 @api_router.put("/employees/{employee_id}", response_model=Employee)
 async def update_employee(employee_id: str, employee_data: EmployeeCreate, current_user: dict = Depends(get_current_user)):
+    database = get_db()
     update_data = employee_data.model_dump()
     update_data['daily_rate'] = update_data['base_salary'] / 30
     
-    await db.employees.update_one(
+    await database.employees.update_one(
         {"id": employee_id, "company_id": current_user["company_id"]},
         {"$set": update_data}
     )
     
-    employee_dict = await db.employees.find_one({"id": employee_id}, {"_id": 0})
+    employee_dict = await database.employees.find_one({"id": employee_id}, {"_id": 0})
     if not employee_dict:
         raise HTTPException(status_code=404, detail="Employee not found")
     if isinstance(employee_dict['created_at'], str):
@@ -1422,10 +1431,52 @@ async def update_employee(employee_id: str, employee_data: EmployeeCreate, curre
 
 @api_router.delete("/employees/{employee_id}")
 async def delete_employee(employee_id: str, current_user: dict = Depends(get_current_user)):
-    result = await db.employees.delete_one({"id": employee_id, "company_id": current_user["company_id"]})
+    database = get_db()
+    result = await database.employees.delete_one({"id": employee_id, "company_id": current_user["company_id"]})
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Employee not found")
     return {"message": "Employee deleted"}
+
+@api_router.post("/production-orders/{order_id}/advance")
+async def advance_production_order(order_id: str, data: dict, current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    order = await database.production_orders.find_one({"id": order_id, "company_id": current_user["company_id"]}, {"_id": 0})
+    if not order:
+        raise HTTPException(status_code=404, detail="Order not found")
+    
+    current_stage = order['stage']
+    next_stage = data.get('next_stage')
+    
+    update_fields = {
+        "stage": next_stage,
+        "updated_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    if current_stage == 'montada' and next_stage == 'alistamiento':
+        update_fields['checklist_alistamiento'] = data.get('checklist', [])
+        update_fields['responsable_alistamiento'] = data.get('responsable')
+        
+    elif current_stage == 'alistamiento' and next_stage == 'procesamiento':
+        # DEDUCT STOCK
+        recipe = await database.recipes.find_one({"id": order['recipe_id']}, {"_id": 0})
+        if recipe:
+            for ing in recipe.get('ingredients', []):
+                required_qty = ing['quantity'] * order['quantity']
+                await database.raw_materials.update_one(
+                    {"id": ing['raw_material_id'], "company_id": current_user["company_id"]},
+                    {"$inc": {"current_stock": -required_qty}}
+                )
+        update_fields['checklist_alistamiento'] = data.get('checklist', order.get('checklist_alistamiento', []))
+        update_fields['responsable_alistamiento'] = data.get('responsable', order.get('responsable_alistamiento'))
+        
+    elif current_stage == 'procesamiento' and next_stage == 'terminada':
+        update_fields['checklist_procesamiento'] = data.get('checklist', [])
+        update_fields['responsable_procesamiento'] = data.get('responsable')
+        update_fields['actual_output'] = data.get('actual_output', order.get('quantity'))
+        update_fields['end_time'] = datetime.now(timezone.utc).isoformat()
+    
+    await database.production_orders.update_one({"id": order_id}, {"$set": update_fields})
+    return {"message": f"Order advanced to {next_stage}"}
 
 # ==================== FINANCE AGGREGATE ENDPOINTS ====================
 

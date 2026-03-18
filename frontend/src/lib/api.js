@@ -1,7 +1,10 @@
 import axios from 'axios';
 
-const API_URL = 'https://checkadmin-api.onrender.com/api';const api = axios.create({
-  baseURL: `${API_URL}`,
+const API_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8000/api' 
+  : 'https://checkadmin-api.onrender.com/api';
+const api = axios.create({
+  baseURL: API_URL,
   headers: { 'Content-Type': 'application/json' },
 });
 

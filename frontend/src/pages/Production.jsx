@@ -45,20 +45,17 @@ export default function Production() {
     toast.success('Orden de producción creada');
   };
 
-  const advanceOrder = async (orderId, newStage) => {
-    const updateData = { stage: newStage };
-    if (newStage === 'procesamiento') {
-      const nov = prompt("Ingrese novedades o notas para el procesamiento (opcional):");
-      if (nov !== null) updateData.novedades = nov;
+  const advanceOrder = async (orderId, nextStage, data = {}) => {
+    try {
+      await api.post(`/production-orders/${orderId}/advance`, {
+        next_stage: nextStage,
+        ...data
+      });
+      loadData();
+      toast.success(`Orden avanzada a: ${nextStage}`);
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error al avanzar la orden');
     }
-    if (newStage === 'terminada') {
-      updateData.end_time = new Date().toISOString();
-      const actual = prompt("Cantidad final producida:", orders.find(o => o.id === orderId)?.quantity || 1);
-      if (actual) updateData.actual_output = parseInt(actual);
-    }
-    await api.put(`/production-orders/${orderId}`, updateData);
-    loadData();
-    toast.info(`Orden avanzada a etapa: ${newStage}`);
   };
 
   const createRecipe = async (e) => {
@@ -208,10 +205,10 @@ export default function Production() {
                 </div>
                 <div className="space-y-2">
                   {ordersByStage[stage].map((o) => {
-                    const currentIdx = stageIdx(o.stage);
-                    const nextStage = stages[currentIdx + 1];
-                    const recipe = getRecipeForOrder(o);
-                    const isExpanded = expandedOrder === o.id;
+                    const [localChecklist, setLocalChecklist] = useState([]);
+                    const [responsable, setResponsable] = useState('');
+                    const [observations, setObservations] = useState('');
+
                     return (
                       <div key={o.id} className="glass-card overflow-hidden">
                         <div className="flex items-center gap-4 p-4">
@@ -241,54 +238,188 @@ export default function Production() {
                           <button onClick={() => setExpandedOrder(isExpanded ? null : o.id)} className={`p-2 rounded-lg transition-colors ${isExpanded ? 'bg-primary-50 text-primary-600' : 'hover:bg-gray-100 text-gray-400'}`}>
                             <List size={20} />
                           </button>
-                          {nextStage && (
+                          {nextStage && o.stage === 'montada' && (
                             <button onClick={() => advanceOrder(o.id, nextStage)} className="btn-primary text-xs px-4 py-2 font-bold uppercase tracking-wider">
-                              {nextStage} <ChevronRight size={14} />
+                              Alimentar <ChevronRight size={14} />
                             </button>
                           )}
                         </div>
-                        {/* Expanded details: materials list */}
+                        {/* Expanded details: checklists and flow */}
                         {isExpanded && recipe && (
                           <div className="px-4 pb-4 border-t border-gray-100 animate-fade-in bg-gray-50/50">
-                            <div className="flex justify-between items-center mt-3 mb-2">
-                              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Lista de Alistamiento (Pre-alistador)</p>
-                              {o.stage === 'montada' && (
-                                <span className="text-[10px] font-bold text-red-500 animate-pulse">VERIFICAR STOCK</span>
-                              )}
-                            </div>
-                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                              {(recipe.ingredients || []).map((ing, i) => {
-                                const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
-                                const neededQty = (ing.quantity * o.quantity / recipe.expected_quantity);
-                                const hasStock = mat ? mat.current_stock >= neededQty : false;
-                                const ingredientCost = neededQty * (mat?.cost_per_unit || 0);
-                                return (
-                                  <div key={i} className={`flex items-center gap-3 p-2 rounded-lg border text-sm transition-colors ${hasStock ? 'bg-white border-gray-100' : 'bg-red-50 border-red-200 text-red-900'}`}>
-                                    <div className={`p-1.5 rounded-md ${hasStock ? 'bg-primary-50 text-primary-500' : 'bg-red-100 text-red-500'}`}>
-                                      <Boxes size={14} />
-                                    </div>
-                                    <div className="flex-1 min-w-0">
-                                      <p className="font-bold truncate">{ing.raw_material_name}</p>
-                                      <p className={`text-[10px] ${hasStock ? 'text-gray-400' : 'text-red-500 font-bold'}`}>
-                                        Stock: {mat?.current_stock || 0} / Requerido: {neededQty.toFixed(2)} {ing.unit}
-                                      </p>
-                                    </div>
-                                    <div className="text-right">
-                                      <p className="font-bold text-xs">{fmt(ingredientCost)}</p>
-                                    </div>
+                            {o.stage === 'alistamiento' && (
+                              <div className="mt-4 space-y-4">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LISTA DE ALISTAMIENTO (PRE-ALISTADOR)</p>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                                  {(recipe.ingredients || []).map((ing, i) => {
+                                    const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
+                                    const neededQty = (ing.quantity * o.quantity) / (recipe.expected_quantity || 1);
+                                    const hasStock = mat ? mat.current_stock >= neededQty : false;
+                                    const isChecked = localChecklist.includes(ing.raw_material_id);
+
+                                    return (
+                                      <div 
+                                        key={i} 
+                                        onClick={() => {
+                                          if (isChecked) setLocalChecklist(localChecklist.filter(id => id !== ing.raw_material_id));
+                                          else setLocalChecklist([...localChecklist, ing.raw_material_id]);
+                                        }}
+                                        className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${isChecked ? 'bg-green-50 border-green-500' : hasStock ? 'bg-white border-gray-100' : 'bg-red-50 border-red-200 opacity-80'}`}
+                                      >
+                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isChecked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'}`}>
+                                          {isChecked && <Plus size={14} className="rotate-45" style={{ transform: 'rotate(0deg)' }} />}
+                                          {isChecked && '✓'}
+                                        </div>
+                                        <div className="flex-1">
+                                          <p className="font-bold text-sm">{ing.raw_material_name}</p>
+                                          <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {neededQty.toFixed(2)} {ing.unit}</p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div className="flex flex-col sm:flex-row gap-4 items-end mt-4">
+                                  <div className="flex-1 w-full">
+                                    <label className="block text-[10px] font-bold text-gray-400 mb-1">NOMBRE RESPONSABLE ALISTAMIENTO</label>
+                                    <input 
+                                      type="text" 
+                                      className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg focus:border-primary-500 outline-none"
+                                      placeholder="Quien alista los materiales..."
+                                      value={responsable}
+                                      onChange={(e) => setResponsable(e.target.value)}
+                                    />
                                   </div>
-                                );
-                              })}
-                            </div>
-                            <div className="flex justify-between items-center mt-4 pt-3 border-t border-gray-200">
-                              <div className="flex items-center gap-4">
-                                <div>
-                                  <p className="text-[10px] text-gray-400 font-bold">COSTO TOTAL ESTIMADO</p>
-                                  <p className="text-xl font-black text-primary-600">{fmt(calcKitCost(recipe) * o.quantity / recipe.expected_quantity)}</p>
+                                  <button 
+                                    disabled={!responsable || localChecklist.length < (recipe.ingredients?.length || 0)}
+                                    onClick={() => advanceOrder(o.id, 'procesamiento', { 
+                                      checklist: localChecklist.map(id => ({material_id: id, checked: true})),
+                                      responsable 
+                                    })}
+                                    className="btn-primary w-full sm:w-auto h-[42px] px-6 font-bold uppercase tracking-widest text-xs"
+                                  >
+                                    Pasar a Procesamiento
+                                  </button>
                                 </div>
                               </div>
-                              <button className="btn-secondary text-xs px-4 font-bold border-2">IMPRIMIR PICKING</button>
-                            </div>
+                            )}
+
+                            {o.stage === 'procesamiento' && (
+                              <div className="mt-4 space-y-4">
+                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">CONTROL DE CALIDAD (OPERARIO)</p>
+                                <div className="bg-white p-4 rounded-xl border-2 border-primary-100 mb-4">
+                                  <p className="text-xs font-bold text-primary-700 mb-2">INSTRUCCIONES DE RECETA:</p>
+                                  <p className="text-sm text-gray-600 italic">{recipe.description || 'Seguir proceso estándar de fabricación.'}</p>
+                                </div>
+                                <div className="space-y-2">
+                                  {[
+                                    'Verificó cantidades e ingredientes según receta',
+                                    'Proceso de mezclado/fabricación completado',
+                                    'Etiquetado y empaque verificado',
+                                    'Cumple con estándares de calidad visual'
+                                  ].map((task, i) => {
+                                    const isChecked = localChecklist.includes(task);
+                                    return (
+                                      <div 
+                                        key={i} 
+                                        onClick={() => {
+                                          if (isChecked) setLocalChecklist(localChecklist.filter(t => t !== task));
+                                          else setLocalChecklist([...localChecklist, task]);
+                                        }}
+                                        className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer hover:bg-white transition-all border-gray-50"
+                                      >
+                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isChecked ? 'bg-primary-500 border-primary-500 text-white' : 'border-gray-300'}`}>
+                                          {isChecked && '✓'}
+                                        </div>
+                                        <span className={`text-sm ${isChecked ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>{task}</span>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                                  <div className="col-span-1">
+                                    <label className="block text-[10px] font-bold text-gray-400 mb-1">RESPONSABLE CALIDAD</label>
+                                    <input 
+                                      type="text" 
+                                      className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg"
+                                      placeholder="Nombre del operario..."
+                                      value={responsable}
+                                      onChange={(e) => setResponsable(e.target.value)}
+                                    />
+                                  </div>
+                                  <div className="col-span-1">
+                                    <label className="block text-[10px] font-bold text-gray-400 mb-1">OBSERVACIONES / NOVEDADES (OPCIONAL)</label>
+                                    <input 
+                                      type="text" 
+                                      className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg"
+                                      placeholder="Ej: lote de goma estaba un poco seco..."
+                                      value={observations}
+                                      onChange={(e) => setObservations(e.target.value)}
+                                    />
+                                  </div>
+                                </div>
+                                <button 
+                                  disabled={!responsable || localChecklist.length < 4}
+                                  onClick={() => {
+                                    const actual = prompt("Cantidad final producida:", o.quantity);
+                                    if (actual) {
+                                      advanceOrder(o.id, 'terminada', { 
+                                        checklist: localChecklist.map(t => ({task: t, checked: true})),
+                                        responsable,
+                                        novedades: observations,
+                                        actual_output: parseInt(actual)
+                                      });
+                                    }
+                                  }}
+                                  className="btn-primary w-full py-3 font-bold uppercase tracking-widest text-sm mt-2"
+                                >
+                                  Finalizar Orden de Producción
+                                </button>
+                              </div>
+                            )}
+
+                            {o.stage === 'montada' && (
+                              <div className="mt-4">
+                                <div className="flex justify-between items-center mb-2">
+                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Resumen de Insumos</p>
+                                  <span className="text-[10px] font-bold text-red-500">VERIFICAR ANTES DE ALISTAR</span>
+                                </div>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                                  {(recipe.ingredients || []).map((ing, i) => {
+                                    const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
+                                    const neededQty = (ing.quantity * o.quantity) / (recipe.expected_quantity || 1);
+                                    const hasStock = mat ? mat.current_stock >= neededQty : false;
+                                    return (
+                                      <div key={i} className={`flex items-center gap-3 p-2 rounded-lg border text-sm ${hasStock ? 'bg-white border-gray-100' : 'bg-red-50 border-red-200 text-red-900'}`}>
+                                        <div className="flex-1 min-w-0">
+                                          <p className="font-bold truncate">{ing.raw_material_name}</p>
+                                          <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {neededQty.toFixed(2)} {ing.unit}</p>
+                                        </div>
+                                      </div>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+                            )}
+                            
+                            {o.stage === 'terminada' && (
+                              <div className="mt-4 p-4 bg-green-50 rounded-xl border border-green-200">
+                                <p className="text-sm font-bold text-green-800 mb-2">ORDEN COMPLETADA</p>
+                                <div className="grid grid-cols-2 gap-4 text-xs font-medium text-green-700">
+                                  <div>
+                                    <p className="text-[10px] text-green-600/60 uppercase">RESP. ALISTAMIENTO</p>
+                                    <p>{o.responsable_alistamiento || '—'}</p>
+                                  </div>
+                                  <div>
+                                    <p className="text-[10px] text-green-600/60 uppercase">RESP. PROCESAMIENTO</p>
+                                    <p>{o.responsable_procesamiento || '—'}</p>
+                                  </div>
+                                  <div className="col-span-2 mt-2">
+                                    <p className="text-[10px] text-green-600/60 uppercase">TIEMPO FINALIZACIÓN</p>
+                                    <p>{o.end_time ? new Date(o.end_time).toLocaleString('es-CO') : '—'}</p>
+                                  </div>
+                                </div>
+                              </div>
+                            )}
                           </div>
                         )}
                       </div>
