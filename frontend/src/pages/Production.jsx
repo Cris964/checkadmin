@@ -4,6 +4,10 @@ import { toast } from 'sonner';
 import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2 } from 'lucide-react';
 
 const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipes, rawMaterials, advanceOrder, expandedOrder, setExpandedOrder, warehouses, fmt }) => {
+  const [localChecklist, setLocalChecklist] = useState([]);
+  const [responsable, setResponsable] = useState('');
+  const [observations, setObservations] = useState('');
+
   const currentIdx = stageIdx(o.stage);
   const nextStage = stages[currentIdx + 1];
   const recipe = getRecipeForOrder(o);
