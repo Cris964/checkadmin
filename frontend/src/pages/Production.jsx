@@ -3,6 +3,230 @@ import api from '../lib/api';
 import { toast } from 'sonner';
 import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2 } from 'lucide-react';
 
+const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipes, rawMaterials, advanceOrder, expandedOrder, setExpandedOrder, warehouses, fmt }) => {
+  const [localChecklist, setLocalChecklist] = useState([]);
+  const [responsable, setResponsable] = useState('');
+  const [observations, setObservations] = useState('');
+
+  const currentIdx = stageIdx(o.stage);
+  const nextStage = stages[currentIdx + 1];
+  const recipe = getRecipeForOrder(o);
+  const isExpanded = expandedOrder === o.id;
+
+  return (
+    <div key={o.id} className="glass-card overflow-hidden">
+      <div className="flex items-center gap-4 p-4">
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2">
+            <p className="font-bold text-gray-800 text-lg">{o.recipe_name}</p>
+            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">Cant: {o.quantity}</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-400 mt-1">
+            <span className="flex items-center gap-1 font-medium text-blue-500"><User size={12} /> {o.created_by || 'Sistema'}</span>
+            <span className="flex items-center gap-1"><Home size={12} /> {o.warehouse_id ? warehouses.find(w => w.id === o.warehouse_id)?.name : 'Sin bodega'}</span>
+            <span>{new Date(o.created_at).toLocaleString('es-CO')}</span>
+            {o.start_time && <span className="flex items-center gap-1"><Clock size={12} /> {new Date(o.start_time).toLocaleTimeString('es-CO')}</span>}
+          </div>
+          {o.novedades && (
+            <div className="mt-2 p-2 bg-yellow-50 border-l-2 border-yellow-400 text-xs text-yellow-800 italic">
+              <strong>Novedades:</strong> {o.novedades}
+            </div>
+          )}
+        </div>
+        <div className="flex items-center gap-1 flex-shrink-0">
+          {stages.map((s, i) => (
+            <div key={s} className={`w-8 h-2 rounded-full ${i <= currentIdx ? 'bg-primary-500' : 'bg-gray-200'}`} title={s} />
+          ))}
+        </div>
+        <button onClick={() => setExpandedOrder(isExpanded ? null : o.id)} className={`p-2 rounded-lg transition-colors ${isExpanded ? 'bg-primary-50 text-primary-600' : 'hover:bg-gray-100 text-gray-400'}`}>
+          <List size={20} />
+        </button>
+        {nextStage && o.stage === 'montada' && (
+          <button onClick={() => advanceOrder(o.id, nextStage)} className="btn-primary text-xs px-4 py-2 font-bold uppercase tracking-wider">
+            Alimentar <ChevronRight size={14} />
+          </button>
+        )}
+      </div>
+      {isExpanded && recipe && (
+        <div className="px-4 pb-4 border-t border-gray-100 animate-fade-in bg-gray-50/50">
+          {o.stage === 'alistamiento' && (
+            <div className="mt-4 space-y-4">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LISTA DE ALISTAMIENTO (PRE-ALISTADOR)</p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                {(recipe.ingredients || []).map((ing, i) => {
+                  const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
+                  const neededQty = (ing.quantity * o.quantity) / (recipe.expected_quantity || 1);
+                  const hasStock = mat ? mat.current_stock >= neededQty : false;
+                  const isChecked = localChecklist.includes(ing.raw_material_id);
+
+                  return (
+                    <div 
+                      key={i} 
+                      onClick={() => {
+                        if (isChecked) setLocalChecklist(localChecklist.filter(id => id !== ing.raw_material_id));
+                        else setLocalChecklist([...localChecklist, ing.raw_material_id]);
+                      }}
+                      className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${isChecked ? 'bg-green-50 border-green-500' : hasStock ? 'bg-white border-gray-100' : 'bg-red-50 border-red-200 opacity-80'}`}
+                    >
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isChecked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'}`}>
+                        {isChecked && '✓'}
+                      </div>
+                      <div className="flex-1">
+                        <p className="font-bold text-sm">{ing.raw_material_name}</p>
+                        <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {neededQty.toFixed(2)} {ing.unit}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="flex flex-col sm:flex-row gap-4 items-end mt-4">
+                <div className="flex-1 w-full">
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1">NOMBRE RESPONSABLE ALISTAMIENTO</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg focus:border-primary-500 outline-none"
+                    placeholder="Quien alista los materiales..."
+                    value={responsable}
+                    onChange={(e) => setResponsable(e.target.value)}
+                  />
+                </div>
+                <button 
+                  disabled={!responsable || localChecklist.length < (recipe.ingredients?.length || 0)}
+                  onClick={() => advanceOrder(o.id, 'procesamiento', { 
+                    checklist: localChecklist.map(id => ({material_id: id, checked: true})),
+                    responsable 
+                  })}
+                  className="btn-primary w-full sm:w-auto h-[42px] px-6 font-bold uppercase tracking-widest text-xs"
+                >
+                  Pasar a Procesamiento
+                </button>
+              </div>
+            </div>
+          )}
+
+          {o.stage === 'procesamiento' && (
+            <div className="mt-4 space-y-4">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">CONTROL DE CALIDAD (OPERARIO)</p>
+              <div className="bg-white p-4 rounded-xl border-2 border-primary-100 mb-4">
+                <p className="text-xs font-bold text-primary-700 mb-2">INSTRUCCIONES DE RECETA:</p>
+                <p className="text-sm text-gray-600 italic">{recipe.description || 'Seguir proceso estándar de fabricación.'}</p>
+              </div>
+              <div className="space-y-2">
+                {[
+                  'Verificó cantidades e ingredientes según receta',
+                  'Proceso de mezclado/fabricación completado',
+                  'Etiquetado y empaque verificado',
+                  'Cumple con estándares de calidad visual'
+                ].map((task, i) => {
+                  const isChecked = localChecklist.includes(task);
+                  return (
+                    <div 
+                      key={i} 
+                      onClick={() => {
+                        if (isChecked) setLocalChecklist(localChecklist.filter(t => t !== task));
+                        else setLocalChecklist([...localChecklist, task]);
+                      }}
+                      className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer hover:bg-white transition-all border-gray-50"
+                    >
+                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isChecked ? 'bg-primary-500 border-primary-500 text-white' : 'border-gray-300'}`}>
+                        {isChecked && '✓'}
+                      </div>
+                      <span className={`text-sm ${isChecked ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>{task}</span>
+                    </div>
+                  );
+                })}
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
+                <div className="col-span-1">
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1">RESPONSABLE CALIDAD</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg"
+                    placeholder="Nombre del operario..."
+                    value={responsable}
+                    onChange={(e) => setResponsable(e.target.value)}
+                  />
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1">OBSERVACIONES / NOVEDADES (OPCIONAL)</label>
+                  <input 
+                    type="text" 
+                    className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg"
+                    placeholder="Ej: lote de goma estaba un poco seco..."
+                    value={observations}
+                    onChange={(e) => setObservations(e.target.value)}
+                  />
+                </div>
+              </div>
+              <button 
+                disabled={!responsable || localChecklist.length < 4}
+                onClick={() => {
+                  const actual = prompt("Cantidad final producida:", o.quantity);
+                  if (actual) {
+                    advanceOrder(o.id, 'terminada', { 
+                      checklist: localChecklist.map(t => ({task: t, checked: true})),
+                      responsable,
+                      novedades: observations,
+                      actual_output: parseInt(actual)
+                    });
+                  }
+                }}
+                className="btn-primary w-full py-3 font-bold uppercase tracking-widest text-sm mt-2"
+              >
+                Finalizar Orden de Producción
+              </button>
+            </div>
+          )}
+
+          {o.stage === 'montada' && (
+            <div className="mt-4">
+              <div className="flex justify-between items-center mb-2">
+                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Resumen de Insumos</p>
+                <span className="text-[10px] font-bold text-red-500">VERIFICAR ANTES DE ALISTAR</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                {(recipe.ingredients || []).map((ing, i) => {
+                  const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
+                  const neededQty = (ing.quantity * o.quantity) / (recipe.expected_quantity || 1);
+                  const hasStock = mat ? mat.current_stock >= neededQty : false;
+                  return (
+                    <div key={i} className={`flex items-center gap-3 p-2 rounded-lg border text-sm ${hasStock ? 'bg-white border-gray-100' : 'bg-red-50 border-red-200 text-red-900'}`}>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-bold truncate">{ing.raw_material_name}</p>
+                        <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {neededQty.toFixed(2)} {ing.unit}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+          
+          {o.stage === 'terminada' && (
+            <div className="mt-4 p-4 bg-green-50 rounded-xl border border-green-200">
+              <p className="text-sm font-bold text-green-800 mb-2">ORDEN COMPLETADA</p>
+              <div className="grid grid-cols-2 gap-4 text-xs font-medium text-green-700">
+                <div>
+                  <p className="text-[10px] text-green-600/60 uppercase">RESP. ALISTAMIENTO</p>
+                  <p>{o.responsable_alistamiento || '—'}</p>
+                </div>
+                <div>
+                  <p className="text-[10px] text-green-600/60 uppercase">RESP. PROCESAMIENTO</p>
+                  <p>{o.responsable_procesamiento || '—'}</p>
+                </div>
+                <div className="col-span-2 mt-2">
+                  <p className="text-[10px] text-green-600/60 uppercase">TIEMPO FINALIZACIÓN</p>
+                  <p>{o.end_time ? new Date(o.end_time).toLocaleString('es-CO') : '—'}</p>
+                </div>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+};
+
 export default function Production() {
   const [tab, setTab] = useState('materials');
   const [orders, setOrders] = useState([]);
@@ -204,227 +428,23 @@ export default function Production() {
                   <div className="flex-1 h-px bg-gray-200" />
                 </div>
                 <div className="space-y-2">
-                  {ordersByStage[stage].map((o) => {
-                    const [localChecklist, setLocalChecklist] = useState([]);
-                    const [responsable, setResponsable] = useState('');
-                    const [observations, setObservations] = useState('');
-
-                    return (
-                      <div key={o.id} className="glass-card overflow-hidden">
-                        <div className="flex items-center gap-4 p-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2">
-                              <p className="font-bold text-gray-800 text-lg">{o.recipe_name}</p>
-                              <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">Cant: {o.quantity}</span>
-                            </div>
-                            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-400 mt-1">
-                              <span className="flex items-center gap-1 font-medium text-blue-500"><User size={12} /> {o.created_by || 'Sistema'}</span>
-                              <span className="flex items-center gap-1"><Home size={12} /> {o.warehouse_id ? warehouses.find(w => w.id === o.warehouse_id)?.name : 'Sin bodega'}</span>
-                              <span>{new Date(o.created_at).toLocaleString('es-CO')}</span>
-                              {o.start_time && <span className="flex items-center gap-1"><Clock size={12} /> {new Date(o.start_time).toLocaleTimeString('es-CO')}</span>}
-                            </div>
-                            {o.novedades && (
-                              <div className="mt-2 p-2 bg-yellow-50 border-l-2 border-yellow-400 text-xs text-yellow-800 italic">
-                                <strong>Novedades:</strong> {o.novedades}
-                              </div>
-                            )}
-                          </div>
-                          {/* Progress indicator */}
-                          <div className="flex items-center gap-1 flex-shrink-0">
-                            {stages.map((s, i) => (
-                              <div key={s} className={`w-8 h-2 rounded-full ${i <= currentIdx ? 'bg-primary-500' : 'bg-gray-200'}`} title={s} />
-                            ))}
-                          </div>
-                          <button onClick={() => setExpandedOrder(isExpanded ? null : o.id)} className={`p-2 rounded-lg transition-colors ${isExpanded ? 'bg-primary-50 text-primary-600' : 'hover:bg-gray-100 text-gray-400'}`}>
-                            <List size={20} />
-                          </button>
-                          {nextStage && o.stage === 'montada' && (
-                            <button onClick={() => advanceOrder(o.id, nextStage)} className="btn-primary text-xs px-4 py-2 font-bold uppercase tracking-wider">
-                              Alimentar <ChevronRight size={14} />
-                            </button>
-                          )}
-                        </div>
-                        {/* Expanded details: checklists and flow */}
-                        {isExpanded && recipe && (
-                          <div className="px-4 pb-4 border-t border-gray-100 animate-fade-in bg-gray-50/50">
-                            {o.stage === 'alistamiento' && (
-                              <div className="mt-4 space-y-4">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LISTA DE ALISTAMIENTO (PRE-ALISTADOR)</p>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
-                                  {(recipe.ingredients || []).map((ing, i) => {
-                                    const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
-                                    const neededQty = (ing.quantity * o.quantity) / (recipe.expected_quantity || 1);
-                                    const hasStock = mat ? mat.current_stock >= neededQty : false;
-                                    const isChecked = localChecklist.includes(ing.raw_material_id);
-
-                                    return (
-                                      <div 
-                                        key={i} 
-                                        onClick={() => {
-                                          if (isChecked) setLocalChecklist(localChecklist.filter(id => id !== ing.raw_material_id));
-                                          else setLocalChecklist([...localChecklist, ing.raw_material_id]);
-                                        }}
-                                        className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${isChecked ? 'bg-green-50 border-green-500' : hasStock ? 'bg-white border-gray-100' : 'bg-red-50 border-red-200 opacity-80'}`}
-                                      >
-                                        <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isChecked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'}`}>
-                                          {isChecked && <Plus size={14} className="rotate-45" style={{ transform: 'rotate(0deg)' }} />}
-                                          {isChecked && '✓'}
-                                        </div>
-                                        <div className="flex-1">
-                                          <p className="font-bold text-sm">{ing.raw_material_name}</p>
-                                          <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {neededQty.toFixed(2)} {ing.unit}</p>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                                <div className="flex flex-col sm:flex-row gap-4 items-end mt-4">
-                                  <div className="flex-1 w-full">
-                                    <label className="block text-[10px] font-bold text-gray-400 mb-1">NOMBRE RESPONSABLE ALISTAMIENTO</label>
-                                    <input 
-                                      type="text" 
-                                      className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg focus:border-primary-500 outline-none"
-                                      placeholder="Quien alista los materiales..."
-                                      value={responsable}
-                                      onChange={(e) => setResponsable(e.target.value)}
-                                    />
-                                  </div>
-                                  <button 
-                                    disabled={!responsable || localChecklist.length < (recipe.ingredients?.length || 0)}
-                                    onClick={() => advanceOrder(o.id, 'procesamiento', { 
-                                      checklist: localChecklist.map(id => ({material_id: id, checked: true})),
-                                      responsable 
-                                    })}
-                                    className="btn-primary w-full sm:w-auto h-[42px] px-6 font-bold uppercase tracking-widest text-xs"
-                                  >
-                                    Pasar a Procesamiento
-                                  </button>
-                                </div>
-                              </div>
-                            )}
-
-                            {o.stage === 'procesamiento' && (
-                              <div className="mt-4 space-y-4">
-                                <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">CONTROL DE CALIDAD (OPERARIO)</p>
-                                <div className="bg-white p-4 rounded-xl border-2 border-primary-100 mb-4">
-                                  <p className="text-xs font-bold text-primary-700 mb-2">INSTRUCCIONES DE RECETA:</p>
-                                  <p className="text-sm text-gray-600 italic">{recipe.description || 'Seguir proceso estándar de fabricación.'}</p>
-                                </div>
-                                <div className="space-y-2">
-                                  {[
-                                    'Verificó cantidades e ingredientes según receta',
-                                    'Proceso de mezclado/fabricación completado',
-                                    'Etiquetado y empaque verificado',
-                                    'Cumple con estándares de calidad visual'
-                                  ].map((task, i) => {
-                                    const isChecked = localChecklist.includes(task);
-                                    return (
-                                      <div 
-                                        key={i} 
-                                        onClick={() => {
-                                          if (isChecked) setLocalChecklist(localChecklist.filter(t => t !== task));
-                                          else setLocalChecklist([...localChecklist, task]);
-                                        }}
-                                        className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer hover:bg-white transition-all border-gray-50"
-                                      >
-                                        <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isChecked ? 'bg-primary-500 border-primary-500 text-white' : 'border-gray-300'}`}>
-                                          {isChecked && '✓'}
-                                        </div>
-                                        <span className={`text-sm ${isChecked ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>{task}</span>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                                  <div className="col-span-1">
-                                    <label className="block text-[10px] font-bold text-gray-400 mb-1">RESPONSABLE CALIDAD</label>
-                                    <input 
-                                      type="text" 
-                                      className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg"
-                                      placeholder="Nombre del operario..."
-                                      value={responsable}
-                                      onChange={(e) => setResponsable(e.target.value)}
-                                    />
-                                  </div>
-                                  <div className="col-span-1">
-                                    <label className="block text-[10px] font-bold text-gray-400 mb-1">OBSERVACIONES / NOVEDADES (OPCIONAL)</label>
-                                    <input 
-                                      type="text" 
-                                      className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg"
-                                      placeholder="Ej: lote de goma estaba un poco seco..."
-                                      value={observations}
-                                      onChange={(e) => setObservations(e.target.value)}
-                                    />
-                                  </div>
-                                </div>
-                                <button 
-                                  disabled={!responsable || localChecklist.length < 4}
-                                  onClick={() => {
-                                    const actual = prompt("Cantidad final producida:", o.quantity);
-                                    if (actual) {
-                                      advanceOrder(o.id, 'terminada', { 
-                                        checklist: localChecklist.map(t => ({task: t, checked: true})),
-                                        responsable,
-                                        novedades: observations,
-                                        actual_output: parseInt(actual)
-                                      });
-                                    }
-                                  }}
-                                  className="btn-primary w-full py-3 font-bold uppercase tracking-widest text-sm mt-2"
-                                >
-                                  Finalizar Orden de Producción
-                                </button>
-                              </div>
-                            )}
-
-                            {o.stage === 'montada' && (
-                              <div className="mt-4">
-                                <div className="flex justify-between items-center mb-2">
-                                  <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">Resumen de Insumos</p>
-                                  <span className="text-[10px] font-bold text-red-500">VERIFICAR ANTES DE ALISTAR</span>
-                                </div>
-                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                                  {(recipe.ingredients || []).map((ing, i) => {
-                                    const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
-                                    const neededQty = (ing.quantity * o.quantity) / (recipe.expected_quantity || 1);
-                                    const hasStock = mat ? mat.current_stock >= neededQty : false;
-                                    return (
-                                      <div key={i} className={`flex items-center gap-3 p-2 rounded-lg border text-sm ${hasStock ? 'bg-white border-gray-100' : 'bg-red-50 border-red-200 text-red-900'}`}>
-                                        <div className="flex-1 min-w-0">
-                                          <p className="font-bold truncate">{ing.raw_material_name}</p>
-                                          <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {neededQty.toFixed(2)} {ing.unit}</p>
-                                        </div>
-                                      </div>
-                                    );
-                                  })}
-                                </div>
-                              </div>
-                            )}
-                            
-                            {o.stage === 'terminada' && (
-                              <div className="mt-4 p-4 bg-green-50 rounded-xl border border-green-200">
-                                <p className="text-sm font-bold text-green-800 mb-2">ORDEN COMPLETADA</p>
-                                <div className="grid grid-cols-2 gap-4 text-xs font-medium text-green-700">
-                                  <div>
-                                    <p className="text-[10px] text-green-600/60 uppercase">RESP. ALISTAMIENTO</p>
-                                    <p>{o.responsable_alistamiento || '—'}</p>
-                                  </div>
-                                  <div>
-                                    <p className="text-[10px] text-green-600/60 uppercase">RESP. PROCESAMIENTO</p>
-                                    <p>{o.responsable_procesamiento || '—'}</p>
-                                  </div>
-                                  <div className="col-span-2 mt-2">
-                                    <p className="text-[10px] text-green-600/60 uppercase">TIEMPO FINALIZACIÓN</p>
-                                    <p>{o.end_time ? new Date(o.end_time).toLocaleString('es-CO') : '—'}</p>
-                                  </div>
-                                </div>
-                              </div>
-                            )}
-                          </div>
-                        )}
-                      </div>
-                    );
-                  })}
+                  {ordersByStage[stage].map((o) => (
+                    <OrderCard 
+                      key={o.id}
+                      o={o}
+                      stages={stages}
+                      stageColors={stageColors}
+                      stageIdx={stageIdx}
+                      getRecipeForOrder={getRecipeForOrder}
+                      recipes={recipes}
+                      rawMaterials={rawMaterials}
+                      advanceOrder={advanceOrder}
+                      expandedOrder={expandedOrder}
+                      setExpandedOrder={setExpandedOrder}
+                      warehouses={warehouses}
+                      fmt={fmt}
+                    />
+                  ))}
                 </div>
               </div>
             )

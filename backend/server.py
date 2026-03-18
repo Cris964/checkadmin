@@ -673,7 +673,8 @@ async def update_me(update_data: UserUpdate, current_user: dict = Depends(get_cu
 
 @api_router.post("/auth/forgot-password")
 async def forgot_password(req: ForgotPasswordRequest):
-    user = await db.users.find_one({"email": req.email})
+    database = get_db()
+    user = await database.users.find_one({"email": req.email})
     if not user:
         # We don't want to reveal if a user exists, but for this demo/app we might just return success
         return {"message": "Si el correo está registrado, recibirás un código."}
@@ -1793,7 +1794,8 @@ async def get_today_sales_summary(current_user: dict = Depends(get_current_user)
     ).to_list(1000)
     
     # Get current shift
-    current_shift = await db.cash_shifts.find_one(
+    database = get_db()
+    current_shift = await database.cash_shifts.find_one(
         {"company_id": current_user["company_id"], "status": "open"},
         {"_id": 0}
     )
@@ -1804,9 +1806,10 @@ async def get_today_sales_summary(current_user: dict = Depends(get_current_user)
     total_transfer = sum(s['total'] for s in sales if s.get('payment_method') == 'transferencia')
     
     # Get best selling products today
+    database = get_db()
     product_sales = {}
     for sale in sales:
-        sale_items = await db.sale_items.find(
+        sale_items = await database.sale_items.find(
             {"company_id": current_user["company_id"]},
             {"_id": 0}
         ).to_list(1000)
@@ -1843,7 +1846,8 @@ async def get_sales_by_date(date: str, current_user: dict = Depends(get_current_
     start = f"{date}T00:00:00"
     end = f"{date}T23:59:59"
     
-    sales = await db.sales.find(
+    database = get_db()
+    sales = await database.sales.find(
         {
             "company_id": current_user["company_id"],
             "created_at": {"$gte": start, "$lte": end}
@@ -1876,8 +1880,9 @@ async def upload_product_image(product_id: str, file: UploadFile = File(...), cu
         await f.write(content)
     
     # Update product with image URL
+    database = get_db()
     image_url = f"/api/uploads/{filename}"
-    await db.products.update_one(
+    await database.products.update_one(
         {"id": product_id, "company_id": current_user["company_id"]},
         {"$set": {"image_url": image_url}}
     )
@@ -1901,8 +1906,9 @@ async def upload_profile_image(file: UploadFile = File(...), current_user: dict 
         await f.write(content)
     
     # Update user with image URL
+    database = get_db()
     image_url = f"/api/uploads/{filename}"
-    await db.users.update_one(
+    await database.users.update_one(
         {"id": current_user["user_id"]},
         {"$set": {"profile_image": image_url}}
     )
