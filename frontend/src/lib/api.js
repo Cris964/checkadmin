@@ -4,7 +4,7 @@ const API_URL = window.location.hostname === 'localhost'
   ? 'http://localhost:8000/api' 
   : 'https://checkadmin-api.onrender.com/api';
 const api = axios.create({
-  baseURL: API_URL,
+  baseURL: API_URL.endsWith('/') ? API_URL : `${API_URL}/`,
   headers: { 'Content-Type': 'application/json' },
 });
 

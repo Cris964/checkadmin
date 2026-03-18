@@ -38,7 +38,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-400 mt-1">
             <span className="flex items-center gap-1 font-medium text-blue-500"><User size={12} /> {o.created_by || 'Sistema'}</span>
-            <span className="flex items-center gap-1"><Home size={12} /> {o.warehouse_id ? warehouses.find(w => w.id === o.warehouse_id)?.name : 'Sin bodega'}</span>
+            <span className="flex items-center gap-1"><Home size={12} /> {o.warehouse_id ? (warehouses || []).find(w => w.id === o.warehouse_id)?.name : 'Sin bodega'}</span>
             <span>{new Date(o.created_at).toLocaleString('es-CO')}</span>
             {o.start_time && <span className="flex items-center gap-1"><Clock size={12} /> {new Date(o.start_time).toLocaleTimeString('es-CO')}</span>}
           </div>
@@ -73,7 +73,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                   const recipeIngQty = parseFloat(ing.quantity) || 0;
                   const recipeExpQty = parseFloat(recipe.expected_quantity) || 1;
                   const neededQty = (recipeIngQty * orderQty) / recipeExpQty;
-                  const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
+                  const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
                   const hasStock = mat ? (parseFloat(mat.current_stock) || 0) >= neededQty : false;
                   const isChecked = localChecklist.includes(ing.raw_material_id);
 
@@ -204,10 +204,10 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {(recipe.ingredients || []).map((ing, i) => {
-                  const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
+                  const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
                   const orderQty = parseFloat(o.quantity) || 0;
                   const ingQty = parseFloat(ing.quantity) || 0;
-                  const expQty = parseFloat(recipe.expected_quantity) || 1;
+                  const expQty = parseFloat(recipe?.expected_quantity) || 1;
                   const neededQty = (ingQty * orderQty) / expQty;
                   const hasStock = mat ? (parseFloat(mat.current_stock) || 0) >= neededQty : false;
                   return (
@@ -464,7 +464,7 @@ export default function Production() {
   const calcKitCost = (recipe) => {
     if (!recipe?.ingredients) return 0;
     return recipe.ingredients.reduce((total, ing) => {
-      const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
+      const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
       return total + (ing.quantity * (mat?.cost_per_unit || 0));
     }, 0);
   };
@@ -556,7 +556,7 @@ export default function Production() {
             const kitCost = calcKitCost(r);
             return (
               <div key={r.id} className="glass-card overflow-hidden border-t-4 border-blue-500 hover:shadow-lg transition-shadow">
-                {r.image_url && (
+                {r.image_url && typeof r.image_url === 'string' && (
                   <div className="h-40 w-full overflow-hidden bg-gray-100">
                     <img src={r.image_url.startsWith('http') ? r.image_url : `https://checkadmin-api.onrender.com${r.image_url}`} alt={r.output_product_name} className="w-full h-full object-cover" />
                   </div>
@@ -611,7 +611,7 @@ export default function Production() {
                   <p className="text-xs text-gray-500">{m.sku}</p>
                   <p className="text-[10px] text-blue-500 font-medium">
                     <Home size={10} className="inline mr-1" />
-                    {m.warehouse_id ? (warehouses.find(w => w.id === m.warehouse_id)?.name || 'Bodega desconocida') : 'Sin bodega'}
+                    {m.warehouse_id ? ((warehouses || []).find(w => w.id === m.warehouse_id)?.name || 'Bodega desconocida') : 'Sin bodega'}
                   </p>
                 </div>
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Stock</p><p className={`font-bold text-sm ${m.current_stock <= m.min_stock ? 'text-red-600' : 'text-green-600'}`}>{m.current_stock} {m.unit}</p></div>
@@ -620,7 +620,7 @@ export default function Production() {
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo/U</p><p className="font-bold text-sm text-primary-600">{fmt(m.cost_per_unit)}</p></div>
                 <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Proveedor</p><p className="font-medium text-xs text-gray-600 truncate">{m.supplier || '—'}</p></div>
                 <div className="flex items-center justify-end gap-2">
-                  {m.image_url && <img src={m.image_url} alt={m.name} className="w-8 h-8 rounded object-cover border border-gray-200" />}
+                  {m.image_url && <img src={m.image_url.startsWith('http') ? m.image_url : `https://checkadmin-api.onrender.com${m.image_url}`} alt={m.name} className="w-8 h-8 rounded object-cover border border-gray-200" />}
                   <button onClick={() => handleEditMaterial(m)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-primary-600 transition-colors">
                     <Edit2 size={16} />
                   </button>
@@ -773,20 +773,20 @@ export default function Production() {
               </div>
               <div className="border-t pt-3">
                 <p className="text-sm font-semibold mb-2">Ingredientes ({recipeForm.ingredients.length})</p>
-                {recipeForm.ingredients.map((ing, i) => {
-                  const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
+                {(recipeForm.ingredients || []).map((ing, i) => {
+                  const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
                   return <p key={i} className="text-xs text-gray-600">• {ing.raw_material_name}: {ing.quantity} {ing.unit} — {fmt(ing.quantity * (mat?.cost_per_unit || 0))}</p>;
                 })}
                 <div className="flex gap-2 mt-2">
-                  <select value={newIngredient.raw_material_id} onChange={(e) => { const m = rawMaterials.find((x) => x.id === e.target.value); setNewIngredient({ ...newIngredient, raw_material_id: e.target.value, raw_material_name: m?.name || '', unit: m?.unit || 'kg' }); }} className="flex-1">
-                    <option value="">Material...</option>{rawMaterials.map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                  <select value={newIngredient.raw_material_id} onChange={(e) => { const m = (rawMaterials || []).find((x) => x.id === e.target.value); setNewIngredient({ ...newIngredient, raw_material_id: e.target.value, raw_material_name: m?.name || '', unit: m?.unit || 'kg' }); }} className="flex-1">
+                    <option value="">Material...</option>{(rawMaterials || []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
                   </select>
                   <input type="number" placeholder="Cant." value={newIngredient.quantity} onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })} className="w-20" />
                   <button type="button" onClick={addIngredient} className="btn-primary text-xs px-3"><Plus size={14} /></button>
                 </div>
                 {recipeForm.ingredients.length > 0 && (
                   <p className="text-sm font-bold text-primary-600 mt-3">Costo total del kit: {fmt(recipeForm.ingredients.reduce((acc, ing) => {
-                    const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
+                    const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
                     return acc + (ing.quantity * (mat?.cost_per_unit || 0));
                   }, 0))}</p>
                 )}

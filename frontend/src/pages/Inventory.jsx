@@ -116,7 +116,7 @@ export default function Inventory() {
   };
 
   const fmt = (n) => `$${(n || 0).toLocaleString('es-CO')}`;
-  const getWarehouseName = (id) => warehouses.find(w => w.id === id)?.name || '—';
+  const getWarehouseName = (id) => (warehouses || []).find(w => w.id === id)?.name || '—';
 
   return (
     <div className="space-y-5 animate-fade-in">
@@ -171,7 +171,7 @@ export default function Inventory() {
               {products.map((p) => (
                 <div key={p.id} className="data-row gap-4">
                   <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    {p.image_url ? <img src={p.image_url.startsWith('http') ? p.image_url : `https://checkadmin-api.onrender.com${p.image_url}`} alt={p.name} className="w-full h-full object-cover rounded-lg" /> : <Package size={24} className="text-gray-300" />}
+                    {p.image_url && typeof p.image_url === 'string' ? <img src={p.image_url.startsWith('http') ? p.image_url : `https://checkadmin-api.onrender.com${p.image_url}`} alt={p.name} className="w-full h-full object-cover rounded-lg" /> : <Package size={24} className="text-gray-300" />}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 flex-1 items-start sm:items-center gap-4">
                     <div>
