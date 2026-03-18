@@ -281,10 +281,23 @@ export default function Production() {
   };
 
   const loadData = async () => {
-    const [o, r, m, p, w] = await Promise.all([
-      api.get('/production-orders'), api.get('/recipes'), api.get('/raw-materials'), api.get('/products'), api.get('/warehouses')
-    ]);
-    setOrders(o.data); setRecipes(r.data); setRawMaterials(m.data); setProducts(p.data); setWarehouses(w.data);
+    try {
+      const [o, r, m, p, w] = await Promise.all([
+        api.get('/production-orders'), 
+        api.get('/recipes'), 
+        api.get('/raw-materials'), 
+        api.get('/products'), 
+        api.get('/warehouses')
+      ]);
+      setOrders(o.data); 
+      setRecipes(r.data); 
+      setRawMaterials(m.data); 
+      setProducts(p.data); 
+      setWarehouses(w.data);
+    } catch (error) {
+      console.error("Error loading production data:", error);
+      toast.error("Error al cargar datos de producción. Verifique la conexión.");
+    }
   };
   useEffect(() => { loadData(); }, []);
 
