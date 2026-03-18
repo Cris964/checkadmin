@@ -8,6 +8,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
   const [responsable, setResponsable] = useState('');
   const [observations, setObservations] = useState('');
 
+  if (!o) return null;
   const currentIdx = stageIdx(o.stage);
   const nextStage = stages[currentIdx + 1];
   const recipe = getRecipeForOrder(o);
@@ -49,7 +50,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
           )}
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
-          {stages.map((s, i) => (
+          {(stages || []).map((s, i) => (
             <div key={s} className={`w-8 h-2 rounded-full ${i <= currentIdx ? 'bg-primary-500' : 'bg-gray-200'}`} title={s} />
           ))}
         </div>
@@ -470,8 +471,8 @@ export default function Production() {
   };
 
   // Group orders by stage
-  const ordersByStage = stages.reduce((acc, stage) => {
-    acc[stage] = orders.filter(o => o.stage === stage);
+  const ordersByStage = (stages || []).reduce((acc, stage) => {
+    acc[stage] = (orders || []).filter(o => o && o.stage === stage);
     return acc;
   }, {});
 
@@ -516,7 +517,7 @@ export default function Production() {
       {tab === 'orders' && (
         <div className="space-y-6">
           {/* Stage Segmented View */}
-          {stages.map(stage => (
+          {(stages || []).map(stage => (
             ordersByStage[stage]?.length > 0 && (
               <div key={stage}>
                 <div className="flex items-center gap-2 mb-3">
@@ -525,9 +526,9 @@ export default function Production() {
                   <div className="flex-1 h-px bg-gray-200" />
                 </div>
                 <div className="space-y-2">
-                  {ordersByStage[stage].map((o) => (
+                  {(ordersByStage[stage] || []).map((o) => (
                     <OrderCard 
-                      key={o.id}
+                      key={o?.id || Math.random()}
                       o={o}
                       stages={stages}
                       stageColors={stageColors}
@@ -552,7 +553,8 @@ export default function Production() {
 
       {tab === 'recipes' && (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {recipes.length === 0 ? <p className="text-gray-400 col-span-full text-center py-8 glass-card">No hay recetas</p> : recipes.map((r) => {
+          {(recipes || []).length === 0 ? <p className="text-gray-400 col-span-full text-center py-8 glass-card">No hay recetas</p> : (recipes || []).map((r) => {
+            if (!r) return null;
             const kitCost = calcKitCost(r);
             return (
               <div key={r.id} className="glass-card overflow-hidden border-t-4 border-blue-500 hover:shadow-lg transition-shadow">
@@ -580,10 +582,10 @@ export default function Production() {
                   <p className="text-sm text-gray-500 mb-4">{r.description || 'Sin descripción'}</p>
                   <div className="space-y-2 mb-4">
                     <p className="text-xs font-bold text-gray-400 uppercase tracking-wider">Ingredientes Principales</p>
-                    {r.ingredients?.slice(0, 3).map((ing, i) => (
+                    {(r.ingredients || []).slice(0, 3).map((ing, i) => (
                       <div key={i} className="flex items-center justify-between text-xs">
-                        <span className="text-gray-600">• {ing.raw_material_name}</span>
-                        <span className="text-gray-500 font-medium">{ing.quantity} {ing.unit}</span>
+                        <span className="text-gray-600">• {ing?.raw_material_name}</span>
+                        <span className="text-gray-500 font-medium">{ing?.quantity} {ing?.unit}</span>
                       </div>
                     ))}
                     {r.ingredients?.length > 3 && <p className="text-xs text-gray-400">+{r.ingredients.length - 3} más...</p>}
@@ -601,32 +603,34 @@ export default function Production() {
 
       {tab === 'materials' && (
         <div className="glass-card overflow-hidden">
-          {rawMaterials.length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas</p> : rawMaterials.map((m) => (
-            <div key={m.id} className="data-row gap-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
-              <Boxes size={22} className="text-primary-400 flex-shrink-0" />
-              <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-4 py-3">
-                <div className="col-span-1 md:col-span-2">
-                  <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Nombre</p>
-                  <p className="font-bold text-sm text-gray-800">{m.name}</p>
-                  <p className="text-xs text-gray-500">{m.sku}</p>
-                  <p className="text-[10px] text-blue-500 font-medium">
-                    <Home size={10} className="inline mr-1" />
-                    {m.warehouse_id ? ((warehouses || []).find(w => w.id === m.warehouse_id)?.name || 'Bodega desconocida') : 'Sin bodega'}
-                  </p>
-                </div>
-                <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Stock</p><p className={`font-bold text-sm ${m.current_stock <= m.min_stock ? 'text-red-600' : 'text-green-600'}`}>{m.current_stock} {m.unit}</p></div>
-                <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Lote</p><p className="font-medium text-xs text-gray-700">{m.lote || '—'}</p></div>
-                <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Vence</p><p className="font-medium text-xs text-gray-700">{m.vencimiento || '—'}</p></div>
-                <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo/U</p><p className="font-bold text-sm text-primary-600">{fmt(m.cost_per_unit)}</p></div>
-                <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Proveedor</p><p className="font-medium text-xs text-gray-600 truncate">{m.supplier || '—'}</p></div>
-                <div className="flex items-center justify-end gap-2">
-                  {m.image_url && <img src={m.image_url.startsWith('http') ? m.image_url : `https://checkadmin-api.onrender.com${m.image_url}`} alt={m.name} className="w-8 h-8 rounded object-cover border border-gray-200" />}
-                  <button onClick={() => handleEditMaterial(m)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-primary-600 transition-colors">
-                    <Edit2 size={16} />
-                  </button>
+          {(rawMaterials || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas</p> : (rawMaterials || []).map((m) => (
+            m && (
+              <div key={m.id} className="data-row gap-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+                <Boxes size={22} className="text-primary-400 flex-shrink-0" />
+                <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-4 py-3">
+                  <div className="col-span-1 md:col-span-2">
+                    <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Nombre</p>
+                    <p className="font-bold text-sm text-gray-800">{m.name}</p>
+                    <p className="text-xs text-gray-500">{m.sku}</p>
+                    <p className="text-[10px] text-blue-500 font-medium">
+                      <Home size={10} className="inline mr-1" />
+                      {m.warehouse_id ? ((warehouses || []).find(w => w.id === m.warehouse_id)?.name || 'Bodega desconocida') : 'Sin bodega'}
+                    </p>
+                  </div>
+                  <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Stock</p><p className={`font-bold text-sm ${m.current_stock <= m.min_stock ? 'text-red-600' : 'text-green-600'}`}>{m.current_stock} {m.unit}</p></div>
+                  <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Lote</p><p className="font-medium text-xs text-gray-700">{m.lote || '—'}</p></div>
+                  <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Vence</p><p className="font-medium text-xs text-gray-700">{m.vencimiento || '—'}</p></div>
+                  <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo/U</p><p className="font-bold text-sm text-primary-600">{fmt(m.cost_per_unit)}</p></div>
+                  <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Proveedor</p><p className="font-medium text-xs text-gray-600 truncate">{m.supplier || '—'}</p></div>
+                  <div className="flex items-center justify-end gap-2">
+                    {m.image_url && <img src={m.image_url.startsWith('http') ? m.image_url : `https://checkadmin-api.onrender.com${m.image_url}`} alt={m.name} className="w-8 h-8 rounded object-cover border border-gray-200" />}
+                    <button onClick={() => handleEditMaterial(m)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-primary-600 transition-colors">
+                      <Edit2 size={16} />
+                    </button>
+                  </div>
                 </div>
               </div>
-            </div>
+            )
           ))}
         </div>
       )}
@@ -724,7 +728,7 @@ export default function Production() {
                     className="w-full p-2 border border-gray-200 rounded-lg"
                   >
                     <option value="">Seleccionar producto...</option>
-                    {products.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
+                    {(products || []).map((p) => <option key={p?.id} value={p?.id}>{p?.name}</option>)}
                   </select>
                 </div>
                 <div>
@@ -779,7 +783,7 @@ export default function Production() {
                 })}
                 <div className="flex gap-2 mt-2">
                   <select value={newIngredient.raw_material_id} onChange={(e) => { const m = (rawMaterials || []).find((x) => x.id === e.target.value); setNewIngredient({ ...newIngredient, raw_material_id: e.target.value, raw_material_name: m?.name || '', unit: m?.unit || 'kg' }); }} className="flex-1">
-                    <option value="">Material...</option>{(rawMaterials || []).map((m) => <option key={m.id} value={m.id}>{m.name}</option>)}
+                    <option value="">Material...</option>{(rawMaterials || []).map((m) => <option key={m?.id} value={m?.id}>{m?.name}</option>)}
                   </select>
                   <input type="number" placeholder="Cant." value={newIngredient.quantity} onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })} className="w-20" />
                   <button type="button" onClick={addIngredient} className="btn-primary text-xs px-3"><Plus size={14} /></button>
