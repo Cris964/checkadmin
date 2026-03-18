@@ -69,11 +69,11 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LISTA DE ALISTAMIENTO (PRE-ALISTADOR)</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {(recipe.ingredients || []).map((ing, i) => {
-                  const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
                   const orderQty = parseFloat(o.quantity) || 0;
                   const recipeIngQty = parseFloat(ing.quantity) || 0;
                   const recipeExpQty = parseFloat(recipe.expected_quantity) || 1;
                   const neededQty = (recipeIngQty * orderQty) / recipeExpQty;
+                  const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
                   const hasStock = mat ? (parseFloat(mat.current_stock) || 0) >= neededQty : false;
                   const isChecked = localChecklist.includes(ing.raw_material_id);
 
@@ -205,14 +205,18 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {(recipe.ingredients || []).map((ing, i) => {
                   const mat = rawMaterials.find(m => m.id === ing.raw_material_id);
-                  const neededQty = (ing.quantity * o.quantity) / (recipe.expected_quantity || 1);
-                  const hasStock = mat ? mat.current_stock >= neededQty : false;
+                  const orderQty = parseFloat(o.quantity) || 0;
+                  const ingQty = parseFloat(ing.quantity) || 0;
+                  const expQty = parseFloat(recipe.expected_quantity) || 1;
+                  const neededQty = (ingQty * orderQty) / expQty;
+                  const hasStock = mat ? (parseFloat(mat.current_stock) || 0) >= neededQty : false;
                   return (
                     <div key={i} className={`flex items-center gap-3 p-2 rounded-lg border text-sm ${hasStock ? 'bg-white border-gray-100' : 'bg-red-50 border-red-200 text-red-900'}`}>
                       <div className="flex-1 min-w-0">
                         <p className="font-bold truncate">{ing.raw_material_name}</p>
-                        <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {neededQty.toFixed(2)} {ing.unit}</p>
+                        <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {isNaN(neededQty) ? '0.00' : neededQty.toFixed(2)} {ing.unit}</p>
                       </div>
+                      {!hasStock && <span className="text-[10px] font-bold text-red-500 flex-shrink-0">Faltan: {isNaN(neededQty) ? '0.00' : (neededQty - (parseFloat(mat?.current_stock) || 0)).toFixed(2)}</span>}
                     </div>
                   );
                 })}
@@ -283,11 +287,11 @@ export default function Production() {
   const loadData = async () => {
     try {
       const [o, r, m, p, w] = await Promise.all([
-        api.get('/production-orders'), 
-        api.get('/recipes'), 
-        api.get('/raw-materials'), 
-        api.get('/products'), 
-        api.get('/warehouses')
+        api.get('production-orders'), 
+        api.get('recipes'), 
+        api.get('raw-materials'), 
+        api.get('products'), 
+        api.get('warehouses')
       ]);
       setOrders(o.data); 
       setRecipes(r.data); 
@@ -304,20 +308,24 @@ export default function Production() {
   const createOrder = async () => {
     const recipe = recipes.find((r) => r.id === selectedRecipe);
     if (!recipe) { toast.error('Selecciona una receta'); return; }
-    await api.post('/production-orders', { 
-      recipe_id: recipe.id, 
-      recipe_name: recipe.output_product_name, 
-      quantity: parseInt(orderQuantity),
-      warehouse_id: selectedWarehouse || null,
-      start_time: new Date().toISOString()
-    });
-    setShowOrderForm(false); setSelectedRecipe(''); setOrderQuantity(1); setSelectedWarehouse(''); loadData();
-    toast.success('Orden de producción creada');
+    try {
+      await api.post('production-orders', { 
+        recipe_id: recipe.id, 
+        recipe_name: recipe.output_product_name, 
+        quantity: parseInt(orderQuantity),
+        warehouse_id: selectedWarehouse || null,
+        start_time: new Date().toISOString()
+      });
+      setShowOrderForm(false); setSelectedRecipe(''); setOrderQuantity(1); setSelectedWarehouse(''); loadData();
+      toast.success('Orden de producción creada');
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error al crear orden');
+    }
   };
 
   const advanceOrder = async (orderId, nextStage, data = {}) => {
     try {
-      await api.post(`/production-orders/${orderId}/advance`, {
+      await api.post(`production-orders/${orderId}/advance`, {
         next_stage: nextStage,
         ...data
       });
@@ -336,10 +344,10 @@ export default function Production() {
       const payload = { ...recipeForm, expected_quantity: parseInt(recipeForm.expected_quantity) };
       
       if (editingRecipe) {
-        await api.put(`/recipes/${editingRecipe.id}`, payload);
+        await api.put(`recipes/${editingRecipe.id}`, payload);
         toast.success('Receta actualizada correctamente');
       } else {
-        const res = await api.post('/recipes', payload);
+        const res = await api.post('recipes', payload);
         recipeId = res.data.id;
         toast.success('Receta/Kit creado correctamente');
       }
@@ -348,7 +356,7 @@ export default function Production() {
       if (selectedRecipeFile && recipeId) {
         const formData = new FormData();
         formData.append('file', selectedRecipeFile);
-        await api.post(`/upload/recipe-image/${recipeId}`, formData, {
+        await api.post(`upload/recipe-image/${recipeId}`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       }
@@ -399,10 +407,10 @@ export default function Production() {
     try {
       let materialId = editingMaterial?.id;
       if (editingMaterial) {
-        await api.put(`/raw-materials/${editingMaterial.id}`, payload);
+        await api.put(`raw-materials/${editingMaterial.id}`, payload);
         toast.success('Materia prima actualizada');
       } else {
-        const res = await api.post('/raw-materials', payload);
+        const res = await api.post('raw-materials', payload);
         materialId = res.data.id;
         toast.success('Materia prima registrada');
       }
@@ -411,7 +419,7 @@ export default function Production() {
       if (selectedMaterialFile && materialId) {
         const formData = new FormData();
         formData.append('file', selectedMaterialFile);
-        await api.post(`/upload/material-image/${materialId}`, formData, {
+        await api.post(`upload/material-image/${materialId}`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       }
@@ -550,7 +558,7 @@ export default function Production() {
               <div key={r.id} className="glass-card overflow-hidden border-t-4 border-blue-500 hover:shadow-lg transition-shadow">
                 {r.image_url && (
                   <div className="h-40 w-full overflow-hidden bg-gray-100">
-                    <img src={r.image_url} alt={r.output_product_name} className="w-full h-full object-cover" />
+                    <img src={r.image_url.startsWith('http') ? r.image_url : `https://checkadmin-api.onrender.com${r.image_url}`} alt={r.output_product_name} className="w-full h-full object-cover" />
                   </div>
                 )}
                 <div className="p-5">

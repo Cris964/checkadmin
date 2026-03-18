@@ -364,6 +364,15 @@ class ProductionOrderCreate(BaseModel):
     warehouse_id: Optional[str] = None
     start_time: Optional[str] = None
 
+class ProductionOrderUpdate(BaseModel):
+    recipe_id: Optional[str] = None
+    recipe_name: Optional[str] = None
+    quantity: Optional[int] = None
+    warehouse_id: Optional[str] = None
+    stage: Optional[str] = None
+    novedades: Optional[str] = None
+    actual_output: Optional[int] = None
+
 class ProductionOrderAdvance(BaseModel):
     next_stage: str
     checklist_alistamiento: Optional[List[dict]] = None
@@ -959,13 +968,17 @@ async def create_raw_material(material_data: RawMaterialCreate, current_user: di
 
 @api_router.put("/raw-materials/{material_id}", response_model=RawMaterial)
 async def update_raw_material(material_id: str, material_data: RawMaterialUpdate, current_user: dict = Depends(get_current_user)):
-    update_fields = material_data.model_dump(exclude_unset=True)
+    update_data = material_data.model_dump(exclude_unset=True)
     
+    # Explicitly handle bodega (warehouse_id)
+    if 'warehouse_id' in update_data and (update_data['warehouse_id'] == "" or update_data['warehouse_id'] is None):
+        update_data['warehouse_id'] = None
+
     database = get_db()
-    if update_fields:
+    if update_data:
         await database.raw_materials.update_one(
             {"id": material_id, "company_id": current_user["company_id"]},
-            {"$set": update_fields}
+            {"$set": update_data}
         )
     
     material_dict = await database.raw_materials.find_one({"id": material_id}, {"_id": 0})
@@ -1102,7 +1115,9 @@ async def advance_production_order(order_id: str, data: ProductionOrderAdvance, 
     database = get_db()
     order = await database.production_orders.find_one({"id": order_id, "company_id": current_user["company_id"]}, {"_id": 0})
     if not order:
-        raise HTTPException(status_code=404, detail="Order not found")
+        # Debugging aid
+        logger.warning(f"Order {order_id} not found for company {current_user['company_id']}")
+        raise HTTPException(status_code=404, detail=f"Order {order_id} not found")
     
     update_fields = {
         "stage": data.next_stage,
@@ -1130,10 +1145,10 @@ async def advance_production_order(order_id: str, data: ProductionOrderAdvance, 
         if recipe:
             # 1. Subtract Ingredients
             for ing in recipe.get('ingredients', []):
-                needed = (ing['quantity'] * order['quantity']) / recipe['expected_quantity']
+                qty = (ing['quantity'] * order['quantity']) / (recipe.get('expected_quantity') or 1)
                 await database.raw_materials.update_one(
                     {"id": ing['raw_material_id'], "company_id": current_user["company_id"]},
-                    {"$inc": {"current_stock": -needed}}
+                    {"$inc": {"current_stock": -qty}}
                 )
             
             # 2. Add Finished Product
@@ -1587,7 +1602,7 @@ async def upload_recipe_image(recipe_id: str, file: UploadFile = File(...), curr
         await f.write(content)
     
     database = get_db()
-    image_url = f"/api/uploads/{filename}"
+    image_url = f"/uploads/{filename}"
     await database.recipes.update_one(
         {"id": recipe_id, "company_id": current_user["company_id"]},
         {"$set": {"image_url": image_url}}
@@ -1608,7 +1623,7 @@ async def upload_material_image(material_id: str, file: UploadFile = File(...), 
         await f.write(content)
     
     database = get_db()
-    image_url = f"/api/uploads/{filename}"
+    image_url = f"/uploads/{filename}"
     await database.raw_materials.update_one(
         {"id": material_id, "company_id": current_user["company_id"]},
         {"$set": {"image_url": image_url}}
@@ -2028,7 +2043,7 @@ async def upload_product_image(product_id: str, file: UploadFile = File(...), cu
     
     # Update product with image URL
     database = get_db()
-    image_url = f"/api/uploads/{filename}"
+    image_url = f"/uploads/{filename}"
     await database.products.update_one(
         {"id": product_id, "company_id": current_user["company_id"]},
         {"$set": {"image_url": image_url}}
@@ -2054,7 +2069,7 @@ async def upload_profile_image(file: UploadFile = File(...), current_user: dict 
     
     # Update user with image URL
     database = get_db()
-    image_url = f"/api/uploads/{filename}"
+    image_url = f"/uploads/{filename}"
     await database.users.update_one(
         {"id": current_user["user_id"]},
         {"$set": {"profile_image": image_url}}
@@ -2065,8 +2080,8 @@ async def upload_profile_image(file: UploadFile = File(...), current_user: dict 
 # Include router
 app.include_router(api_router)
 
-# Mount uploads directory for serving static files
-app.mount("/api/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
+# Mount uploads directory for serving static files - move to /uploads to avoid /api conflict
+app.mount("/uploads", StaticFiles(directory=str(UPLOADS_DIR)), name="uploads")
 
 app.add_middleware(
     CORSMiddleware,

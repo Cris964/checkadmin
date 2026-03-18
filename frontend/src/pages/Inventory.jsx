@@ -16,7 +16,7 @@ export default function Inventory() {
   const [whForm, setWhForm] = useState({ name: '', location: '', description: '' });
 
   const loadData = async () => {
-    const [p, w] = await Promise.all([api.get('/products'), api.get('/warehouses')]);
+    const [p, w] = await Promise.all([api.get('products'), api.get('warehouses')]);
     setProducts(p.data);
     setWarehouses(w.data);
   };
@@ -29,7 +29,7 @@ export default function Inventory() {
       return;
     }
     try {
-      const res = await api.get(`/warehouses/${warehouseId}/products`);
+      const res = await api.get(`warehouses/${warehouseId}/products`);
       setWarehouseProducts(prev => ({ ...prev, [warehouseId]: res.data }));
       setExpandedWarehouse(warehouseId);
     } catch (e) { console.error(e); }
@@ -58,9 +58,9 @@ export default function Inventory() {
       try {
         let productId = editingProduct?.id;
         if (editingProduct) {
-          await api.put(`/products/${editingProduct.id}`, data);
+          await api.put(`products/${editingProduct.id}`, data);
         } else {
-          const res = await api.post('/products', data);
+          const res = await api.post('products', data);
           productId = res.data.id;
         }
 
@@ -68,7 +68,7 @@ export default function Inventory() {
         if (selectedFile && productId) {
           const formData = new FormData();
           formData.append('file', selectedFile);
-          await api.post(`/upload/product-image/${productId}`, formData, {
+          await api.post(`upload/product-image/${productId}`, formData, {
             headers: { 'Content-Type': 'multipart/form-data' }
           });
         }
@@ -94,14 +94,14 @@ export default function Inventory() {
 
   const deleteProduct = async (id) => {
     if (!confirm('¿Eliminar producto?')) return;
-    await api.delete(`/products/${id}`);
+    await api.delete(`products/${id}`);
     loadData();
     toast.success('Producto eliminado');
   };
 
   const createWarehouse = async (e) => {
     e.preventDefault();
-    await api.post('/warehouses', whForm);
+    await api.post('warehouses', whForm);
     setShowWarehouseForm(false);
     setWhForm({ name: '', location: '', description: '' });
     loadData();
@@ -110,7 +110,7 @@ export default function Inventory() {
 
   const deleteWarehouse = async (id) => {
     if (!confirm('¿Eliminar bodega?')) return;
-    await api.delete(`/warehouses/${id}`);
+    await api.delete(`warehouses/${id}`);
     loadData();
     toast.success('Bodega eliminada');
   };
@@ -171,7 +171,7 @@ export default function Inventory() {
               {products.map((p) => (
                 <div key={p.id} className="data-row gap-4">
                   <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    {p.image_url ? <img src={p.image_url} alt={p.name} className="w-full h-full object-cover rounded-lg" /> : <Package size={24} className="text-gray-300" />}
+                    {p.image_url ? <img src={p.image_url.startsWith('http') ? p.image_url : `https://checkadmin-api.onrender.com${p.image_url}`} alt={p.name} className="w-full h-full object-cover rounded-lg" /> : <Package size={24} className="text-gray-300" />}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 flex-1 items-start sm:items-center gap-4">
                     <div>
