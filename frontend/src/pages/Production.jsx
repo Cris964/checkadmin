@@ -30,7 +30,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="font-bold text-gray-800 text-lg">{o.recipe_name}</p>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">Cant: {o.quantity}</span>
+            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">Cant: {o.quantity || 0}</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-400 mt-1">
             <span className="flex items-center gap-1 font-medium text-blue-500"><User size={12} /> {o.created_by || 'Sistema'}</span>

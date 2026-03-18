@@ -59,7 +59,7 @@ class MockCollection:
                 "name": "Admin Demo",
                 "company_id": "company_123",
                 "role": "admin",
-                "password": pwd_context.hash("Admin123"),
+                "password": pwd_context.hash("Admin123*"),
                 "created_at": datetime.now(timezone.utc).isoformat(),
                 "permissions": ["dashboard", "sales", "inventory", "production", "payroll", "finance", "settings"]
             }
@@ -2077,4 +2077,9 @@ logger = logging.getLogger(__name__)
 
 @app.on_event("shutdown")
 async def shutdown_db_client():
-    client.close()
+    if db is not None:
+        client.close()
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
