@@ -507,7 +507,7 @@ export default function Production() {
 
   return (
     <>
-      <div className="space-y-5 animate-fade-in">
+      <div className="space-y-5">
       <div className="flex items-start justify-between">
         <div>
           <h1 className="text-4xl font-bold text-gray-900">Producción</h1>
