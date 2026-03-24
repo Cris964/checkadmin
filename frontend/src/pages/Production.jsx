@@ -35,7 +35,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2">
             <p className="font-bold text-gray-800 text-lg">{o.recipe_name}</p>
-            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">Cant: {o.quantity || 0}</span>
+            <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">Cant: {o.quantity || 1}</span>
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-400 mt-1">
             <span className="flex items-center gap-1 font-medium text-blue-500"><User size={12} /> {o.created_by || 'Sistema'}</span>
@@ -70,7 +70,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LISTA DE ALISTAMIENTO (PRE-ALISTADOR)</p>
               <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
                 {(recipe.ingredients || []).map((ing, i) => {
-                  const orderQty = parseFloat(o.quantity) || 0;
+                  const orderQty = parseFloat(o.quantity) || 1;
                   const recipeIngQty = parseFloat(ing.quantity) || 0;
                   const recipeExpQty = parseFloat(recipe.expected_quantity) || 1;
                   const neededQty = (recipeIngQty * orderQty) / recipeExpQty;
@@ -219,7 +219,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                 {(recipe.ingredients || []).map((ing, i) => {
                   const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
-                  const orderQty = parseFloat(o.quantity) || 0;
+                  const orderQty = parseFloat(o.quantity) || 1;
                   const ingQty = parseFloat(ing.quantity) || 0;
                   const expQty = parseFloat(recipe?.expected_quantity) || 1;
                   const neededQty = (ingQty * orderQty) / expQty;
@@ -307,6 +307,7 @@ export default function Production() {
         api.get('products').catch(() => ({ data: [] })), 
         api.get('warehouses').catch(() => ({ data: [] }))
       ]);
+      console.log('📦 Órdenes crudas desde BD:', o.data);
       setOrders(o.data || []); 
       setRecipes(r.data || []); 
       setRawMaterials(m.data || []); 
@@ -322,11 +323,13 @@ export default function Production() {
   const createOrder = async () => {
     const recipe = recipes.find((r) => r.id === selectedRecipe);
     if (!recipe) { toast.error('Selecciona una receta'); return; }
+    const validQty = parseInt(orderQuantity) || 1;
+    if (validQty <= 0) { toast.error('La cantidad a producir debe ser mayor a 0'); return; }
     try {
       await api.post('production-orders', { 
         recipe_id: recipe.id, 
         recipe_name: recipe.output_product_name, 
-        quantity: parseInt(orderQuantity),
+        quantity: validQty,
         warehouse_id: selectedWarehouse || null,
         start_time: new Date().toISOString()
       });
