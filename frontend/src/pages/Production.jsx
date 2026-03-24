@@ -82,17 +82,26 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                     <div 
                       key={i} 
                       onClick={() => {
+                        if (!hasStock && !isChecked) {
+                          const faltante = isNaN(neededQty) ? '0.00' : (neededQty - (parseFloat(mat?.current_stock) || 0)).toFixed(2);
+                          toast.error(`Stock insuficiente de ${ing.raw_material_name}. Faltan ${faltante} ${ing.unit}.`);
+                          return;
+                        }
                         if (isChecked) setLocalChecklist(localChecklist.filter(id => id !== ing.raw_material_id));
                         else setLocalChecklist([...localChecklist, ing.raw_material_id]);
                       }}
-                      className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${isChecked ? 'bg-green-50 border-green-500' : hasStock ? 'bg-white border-gray-100' : 'bg-red-50 border-red-200 opacity-80'}`}
+                      className={`flex items-center gap-3 p-3 rounded-xl border-2 cursor-pointer transition-all ${isChecked ? 'bg-green-50 border-green-500' : hasStock ? 'bg-white border-gray-100' : 'bg-red-50 border-red-500 opacity-90'}`}
                     >
-                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isChecked ? 'bg-green-500 border-green-500 text-white' : 'border-gray-300'}`}>
+                      <div className={`w-5 h-5 rounded border-2 flex items-center justify-center ${isChecked ? 'bg-green-500 border-green-500 text-white' : hasStock ? 'border-gray-300' : 'border-red-300 bg-red-100'}`}>
                         {isChecked && '✓'}
+                        {!isChecked && !hasStock && <span className="text-[10px] text-red-500 font-bold">X</span>}
                       </div>
                       <div className="flex-1">
                         <p className="font-bold text-sm">{ing.raw_material_name}</p>
-                        <p className="text-[10px] text-gray-500">Stock: {mat?.current_stock || 0} / Req: {isNaN(neededQty) ? '0.00' : neededQty.toFixed(2)} {ing.unit}</p>
+                        <p className={`text-[10px] font-medium ${hasStock ? 'text-gray-500' : 'text-red-600'}`}>
+                          Stock: {mat?.current_stock || 0} / Req: {isNaN(neededQty) ? '0.00' : neededQty.toFixed(2)} {ing.unit}
+                          {!hasStock && ` (Faltan ${(neededQty - (parseFloat(mat?.current_stock) || 0)).toFixed(2)})`}
+                        </p>
                       </div>
                     </div>
                   );
@@ -113,7 +122,11 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                   disabled={!responsable || localChecklist.length < (recipe.ingredients?.length || 0)}
                   onClick={() => advanceOrder(o.id, 'procesamiento', { 
                     responsable_alistamiento: responsable,
-                    checklist_alistamiento: localChecklist.map(id => ({material_id: id, checked: true}))
+                    checklist_alistamiento: (recipe.ingredients || []).map(ing => ({
+                      material_id: ing.raw_material_id,
+                      name: ing.raw_material_name,
+                      checked: localChecklist.includes(ing.raw_material_id)
+                    }))
                   })}
                   className="btn-primary w-full sm:w-auto h-[42px] px-6 font-bold uppercase tracking-widest text-xs"
                 >
@@ -288,17 +301,17 @@ export default function Production() {
   const loadData = async () => {
     try {
       const [o, r, m, p, w] = await Promise.all([
-        api.get('production-orders'), 
-        api.get('recipes'), 
-        api.get('raw-materials'), 
-        api.get('products'), 
-        api.get('warehouses')
+        api.get('production-orders').catch(() => ({ data: [] })), 
+        api.get('recipes').catch(() => ({ data: [] })), 
+        api.get('raw-materials').catch(() => ({ data: [] })), 
+        api.get('products').catch(() => ({ data: [] })), 
+        api.get('warehouses').catch(() => ({ data: [] }))
       ]);
-      setOrders(o.data); 
-      setRecipes(r.data); 
-      setRawMaterials(m.data); 
-      setProducts(p.data); 
-      setWarehouses(w.data);
+      setOrders(o.data || []); 
+      setRecipes(r.data || []); 
+      setRawMaterials(m.data || []); 
+      setProducts(p.data || []); 
+      setWarehouses(w.data || []);
     } catch (error) {
       console.error("Error loading production data:", error);
       toast.error("Error al cargar datos de producción. Verifique la conexión.");
@@ -390,7 +403,7 @@ export default function Production() {
 
   const addIngredient = () => {
     if (!newIngredient.raw_material_id || !newIngredient.quantity) return;
-    setRecipeForm({ ...recipeForm, ingredients: [...recipeForm.ingredients, { ...newIngredient, quantity: parseFloat(newIngredient.quantity) }] });
+    setRecipeForm({ ...recipeForm, ingredients: [...recipeForm.ingredients, { ...newIngredient, quantity: parseFloat(newIngredient.quantity) || 0 }] });
     setNewIngredient({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg' });
   };
 
@@ -399,9 +412,9 @@ export default function Production() {
     setUploading(true);
     const payload = { 
       ...materialForm, 
-      current_stock: parseFloat(materialForm.current_stock), 
-      min_stock: parseFloat(materialForm.min_stock), 
-      cost_per_unit: parseFloat(materialForm.cost_per_unit),
+      current_stock: parseFloat(materialForm.current_stock) || 0, 
+      min_stock: parseFloat(materialForm.min_stock) || 0, 
+      cost_per_unit: parseFloat(materialForm.cost_per_unit) || 0,
       warehouse_id: materialForm.warehouse_id || null
     };
 
@@ -458,7 +471,7 @@ export default function Production() {
   const stageColors = { montada: 'badge-blue', alistamiento: 'badge-yellow', procesamiento: 'badge-purple', terminada: 'badge-green' };
   const stageIdx = (stage) => stages.indexOf(stage);
 
-  const getRecipeForOrder = (order) => recipes.find(r => r.id === order.recipe_id);
+  const getRecipeForOrder = (order) => (recipes || []).find(r => r?.id === order?.recipe_id);
   const fmt = (n) => `$${(n || 0).toLocaleString('es-CO')}`;
 
   // Calculate kit cost
@@ -607,7 +620,7 @@ export default function Production() {
             m && (
               <div key={m.id} className="data-row gap-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                 <Boxes size={22} className="text-primary-400 flex-shrink-0" />
-                <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-7 gap-4 py-3">
+                <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-8 gap-4 py-3">
                   <div className="col-span-1 md:col-span-2">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Nombre</p>
                     <p className="font-bold text-sm text-gray-800">{m.name}</p>
@@ -649,7 +662,7 @@ export default function Production() {
                   onChange={(e) => setSelectedRecipe(e.target.value)}
                 >
                   <option value="">Seleccionar receta...</option>
-                  {recipes.map((r) => <option key={r.id} value={r.id}>{r.output_product_name} ({r.cliente || 'Genérico'})</option>)}
+                  {(recipes || []).map((r) => <option key={r?.id} value={r?.id}>{r?.output_product_name} ({r?.cliente || 'Genérico'})</option>)}
                 </select>
               </div>
               <div className="grid grid-cols-2 gap-4">
@@ -671,20 +684,20 @@ export default function Production() {
                     onChange={(e) => setSelectedWarehouse(e.target.value)}
                   >
                     <option value="">Seleccionar bodega...</option>
-                    {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                    {(warehouses || []).map(w => <option key={w?.id} value={w?.id}>{w?.name}</option>)}
                   </select>
                 </div>
               </div>
               {selectedRecipe && (() => {
-                const recipe = recipes.find(r => r.id === selectedRecipe);
-                return recipe?.ingredients?.length > 0 && (
+                const recipe = (recipes || []).find(r => r?.id === selectedRecipe);
+                return (recipe?.ingredients || []).length > 0 && (
                   <div className="bg-blue-50 p-3 rounded-lg border border-blue-100">
                     <p className="text-xs font-bold text-blue-700 uppercase tracking-wider mb-2">Resumen de Materiales ({orderQuantity} cant.)</p>
                     <div className="space-y-1">
-                      {recipe.ingredients.map((ing, i) => (
+                      {(recipe.ingredients || []).map((ing, i) => (
                         <div key={i} className="flex justify-between text-xs text-blue-800">
-                          <span>{ing.raw_material_name}</span>
-                          <span className="font-bold">{(ing.quantity * orderQuantity / recipe.expected_quantity).toFixed(2)} {ing.unit}</span>
+                          <span>{ing?.raw_material_name}</span>
+                          <span className="font-bold">{(ing?.quantity * orderQuantity / (recipe?.expected_quantity || 1)).toFixed(2)} {ing?.unit}</span>
                         </div>
                       ))}
                     </div>
@@ -721,7 +734,7 @@ export default function Production() {
                   <select 
                     value={recipeForm.output_product_id} 
                     onChange={(e) => { 
-                      const p = products.find((x) => x.id === e.target.value); 
+                      const p = (products || []).find((x) => x?.id === e.target.value); 
                       setRecipeForm({ ...recipeForm, output_product_id: e.target.value, output_product_name: p?.name || '' }); 
                     }} 
                     required
@@ -782,7 +795,7 @@ export default function Production() {
                   return <p key={i} className="text-xs text-gray-600">• {ing.raw_material_name}: {ing.quantity} {ing.unit} — {fmt(ing.quantity * (mat?.cost_per_unit || 0))}</p>;
                 })}
                 <div className="flex gap-2 mt-2">
-                  <select value={newIngredient.raw_material_id} onChange={(e) => { const m = (rawMaterials || []).find((x) => x.id === e.target.value); setNewIngredient({ ...newIngredient, raw_material_id: e.target.value, raw_material_name: m?.name || '', unit: m?.unit || 'kg' }); }} className="flex-1">
+                  <select value={newIngredient.raw_material_id} onChange={(e) => { const m = (rawMaterials || []).find((x) => x?.id === e.target.value); setNewIngredient({ ...newIngredient, raw_material_id: e.target.value, raw_material_name: m?.name || '', unit: m?.unit || 'kg' }); }} className="flex-1">
                     <option value="">Material...</option>{(rawMaterials || []).map((m) => <option key={m?.id} value={m?.id}>{m?.name}</option>)}
                   </select>
                   <input type="number" placeholder="Cant." value={newIngredient.quantity} onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })} className="w-20" />
@@ -834,7 +847,7 @@ export default function Production() {
                   className="w-full"
                 >
                   <option value="">Seleccionar bodega...</option>
-                  {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
+                  {(warehouses || []).map(w => <option key={w?.id} value={w?.id}>{w?.name}</option>)}
                 </select>
               </div>
               <div>
