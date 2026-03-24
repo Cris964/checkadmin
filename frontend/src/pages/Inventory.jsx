@@ -14,11 +14,16 @@ export default function Inventory() {
   const [warehouseProducts, setWarehouseProducts] = useState({});
   const [form, setForm] = useState({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '' });
   const [whForm, setWhForm] = useState({ name: '', location: '', description: '' });
+  const [editingWarehouse, setEditingWarehouse] = useState(null);
+  const [managingWarehouse, setManagingWarehouse] = useState(null);
 
   const loadData = async () => {
-    const [p, w] = await Promise.all([api.get('products'), api.get('warehouses')]);
-    setProducts(p.data);
-    setWarehouses(w.data);
+    const [p, w] = await Promise.all([
+      api.get('products').catch(() => ({ data: [] })), 
+      api.get('warehouses').catch(() => ({ data: [] }))
+    ]);
+    setProducts(p.data || []);
+    setWarehouses(w.data || []);
   };
 
   useEffect(() => { loadData(); }, []);
@@ -101,11 +106,37 @@ export default function Inventory() {
 
   const createWarehouse = async (e) => {
     e.preventDefault();
-    await api.post('warehouses', whForm);
-    setShowWarehouseForm(false);
-    setWhForm({ name: '', location: '', description: '' });
-    loadData();
-    toast.success('Bodega creada');
+    try {
+      if (editingWarehouse) {
+        await api.put(`warehouses/${editingWarehouse.id}`, whForm);
+        toast.success('Bodega actualizada');
+      } else {
+        await api.post('warehouses', whForm);
+        toast.success('Bodega creada');
+      }
+      setShowWarehouseForm(false);
+      setWhForm({ name: '', location: '', description: '' });
+      setEditingWarehouse(null);
+      loadData();
+    } catch (e) {
+      toast.error('Error al guardar bodega');
+    }
+  };
+
+  const editWarehouse = (w) => {
+    setEditingWarehouse(w);
+    setWhForm({ name: w.name, location: w.location, description: w.description || '' });
+    setShowWarehouseForm(true);
+  };
+
+  const toggleProductWarehouse = async (product, warehouseId) => {
+    try {
+      await api.put(`products/${product.id}`, { ...product, warehouse_id: warehouseId });
+      loadData();
+      toast.success(warehouseId ? 'Producto asignado a bodega' : 'Producto removido de bodega');
+    } catch (e) {
+      toast.error('Error al mover producto');
+    }
   };
 
   const deleteWarehouse = async (id) => {
@@ -130,7 +161,7 @@ export default function Inventory() {
             <Plus size={16} /> Nuevo Producto
           </button>
         ) : (
-          <button onClick={() => setShowWarehouseForm(true)} className="btn-primary">
+          <button onClick={() => { setEditingWarehouse(null); setWhForm({ name: '', location: '', description: '' }); setShowWarehouseForm(true); }} className="btn-primary">
             <Plus size={16} /> Nueva Bodega
           </button>
         )}
@@ -227,13 +258,20 @@ export default function Inventory() {
                   </div>
                 </div>
                 <div className="flex gap-1">
-                  <button onClick={() => loadWarehouseProducts(w.id)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors">
+                  <button onClick={() => editWarehouse(w)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Editar Bodega"><Pencil size={16} className="text-gray-500" /></button>
+                  <button onClick={() => loadWarehouseProducts(w.id)} className="p-1.5 hover:bg-gray-100 rounded-lg transition-colors" title="Ver Contenido">
                     {expandedWarehouse === w.id ? <ChevronUp size={16} className="text-primary-500" /> : <ChevronDown size={16} className="text-gray-400" />}
                   </button>
-                  <button onClick={() => deleteWarehouse(w.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors"><Trash2 size={16} className="text-red-400" /></button>
+                  <button onClick={() => deleteWarehouse(w.id)} className="p-1.5 hover:bg-red-50 rounded-lg transition-colors" title="Eliminar Bodega"><Trash2 size={16} className="text-red-400" /></button>
                 </div>
               </div>
               {w.description && <p className="text-xs text-gray-400 mb-3">{w.description}</p>}
+              <button 
+                onClick={() => setManagingWarehouse(w)} 
+                className="w-full text-xs font-semibold py-1.5 mb-2 border border-gray-200 rounded-lg text-gray-600 hover:bg-gray-50 hover:text-primary-600 transition-colors uppercase tracking-wider"
+              >
+                Gestionar Productos
+              </button>
 
               {/* Products in warehouse */}
               {expandedWarehouse === w.id && (
@@ -319,15 +357,71 @@ export default function Inventory() {
         <div className="modal-overlay" onClick={() => setShowWarehouseForm(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
-              <h3 className="text-xl font-bold">Nueva Bodega</h3>
-              <button onClick={() => setShowWarehouseForm(false)}><X size={20} /></button>
+              <h3 className="text-xl font-bold">{editingWarehouse ? 'Editar Bodega' : 'Nueva Bodega'}</h3>
+              <button onClick={() => { setShowWarehouseForm(false); setEditingWarehouse(null); }}><X size={20} /></button>
             </div>
             <form onSubmit={createWarehouse} className="space-y-3">
               <div><label className="block text-sm font-semibold mb-1">Nombre</label><input value={whForm.name} onChange={(e) => setWhForm({ ...whForm, name: e.target.value })} required /></div>
               <div><label className="block text-sm font-semibold mb-1">Ubicación</label><input value={whForm.location} onChange={(e) => setWhForm({ ...whForm, location: e.target.value })} required /></div>
               <div><label className="block text-sm font-semibold mb-1">Descripción</label><textarea value={whForm.description} onChange={(e) => setWhForm({ ...whForm, description: e.target.value })} rows={3} /></div>
-              <button type="submit" className="btn-primary w-full justify-center py-2.5">Crear Bodega</button>
+              <button type="submit" className="btn-primary w-full justify-center py-2.5">{editingWarehouse ? 'Guardar Cambios' : 'Crear Bodega'}</button>
             </form>
+          </div>
+        </div>
+      )}
+
+      {/* Manage Warehouse Products Modal */}
+      {managingWarehouse && (
+        <div className="modal-overlay" onClick={() => setManagingWarehouse(null)}>
+          <div className="modal-content max-w-2xl" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <div>
+                <h3 className="text-xl font-bold">Gestionar Productos</h3>
+                <p className="text-sm text-gray-500 mt-1">Bodega: <span className="font-semibold text-primary-600">{managingWarehouse.name}</span></p>
+              </div>
+              <button onClick={() => setManagingWarehouse(null)}><X size={20} /></button>
+            </div>
+            
+            <div className="grid grid-cols-2 gap-6 h-[400px]">
+              {/* Productos en la bodega */}
+              <div className="flex flex-col border border-gray-200 rounded-lg bg-gray-50 overflow-hidden">
+                <div className="bg-gray-200 px-3 py-2 border-b border-gray-300">
+                  <p className="text-xs font-bold text-gray-700 tracking-wider">EN ESTA BODEGA</p>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                  {products.filter(p => p.warehouse_id === managingWarehouse.id).map(p => (
+                    <div key={p.id} className="flex items-center justify-between bg-white p-2 rounded border border-gray-100 shadow-sm text-sm">
+                      <span className="font-medium text-gray-700 truncate mr-2" title={p.name}>{p.name} <span className="text-gray-400 ml-1">({p.stock_current})</span></span>
+                      <button onClick={() => toggleProductWarehouse(p, null)} className="text-red-500 hover:text-red-700 font-semibold text-xs px-2 py-1 rounded bg-red-50">Sacar</button>
+                    </div>
+                  ))}
+                  {products.filter(p => p.warehouse_id === managingWarehouse.id).length === 0 && (
+                    <p className="text-xs text-center text-gray-400 mt-8">Bodega vacía</p>
+                  )}
+                </div>
+              </div>
+
+              {/* Productos disponibles */}
+              <div className="flex flex-col border border-gray-200 rounded-lg bg-white overflow-hidden">
+                <div className="bg-gray-100 px-3 py-2 border-b border-gray-200 flex justify-between items-center">
+                  <p className="text-xs font-bold text-gray-700 tracking-wider">DISPONIBLES (OTRAS BODEGAS)</p>
+                </div>
+                <div className="flex-1 overflow-y-auto p-2 space-y-2">
+                  {products.filter(p => p.warehouse_id !== managingWarehouse.id).map(p => (
+                    <div key={p.id} className="flex items-center justify-between bg-gray-50 p-2 rounded border border-gray-100 text-sm hover:bg-white transition-colors">
+                      <div className="flex flex-col overflow-hidden mr-2">
+                        <span className="font-medium text-gray-700 truncate" title={p.name}>{p.name}</span>
+                        <span className="text-[10px] text-gray-400 mt-0.5 truncate">{getWarehouseName(p.warehouse_id)}</span>
+                      </div>
+                      <button onClick={() => toggleProductWarehouse(p, managingWarehouse.id)} className="text-primary-600 hover:text-primary-800 font-semibold text-xs px-2 py-1 rounded bg-primary-50">Meter</button>
+                    </div>
+                  ))}
+                  {products.filter(p => p.warehouse_id !== managingWarehouse.id).length === 0 && (
+                    <p className="text-xs text-center text-gray-400 mt-8">No hay otros productos</p>
+                  )}
+                </div>
+              </div>
+            </div>
           </div>
         </div>
       )}

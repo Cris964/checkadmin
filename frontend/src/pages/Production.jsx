@@ -360,6 +360,19 @@ export default function Production() {
       let recipeId = editingRecipe?.id;
       const payload = { ...recipeForm, expected_quantity: parseInt(recipeForm.expected_quantity) };
       
+      if (payload.output_product_id === 'NEW') {
+        const productRes = await api.post('products', {
+          sku: `GEN-${Math.floor(Math.random() * 10000)}`,
+          name: payload.output_product_name,
+          cost_buy: 0,
+          cost_sell: 0,
+          stock_current: 0,
+          stock_min: 0,
+          warehouse_id: null
+        });
+        payload.output_product_id = productRes.data.id;
+      }
+
       if (editingRecipe) {
         await api.put(`recipes/${editingRecipe.id}`, payload);
         toast.success('Receta actualizada correctamente');
@@ -737,15 +750,34 @@ export default function Production() {
                   <select 
                     value={recipeForm.output_product_id} 
                     onChange={(e) => { 
-                      const p = (products || []).find((x) => x?.id === e.target.value); 
-                      setRecipeForm({ ...recipeForm, output_product_id: e.target.value, output_product_name: p?.name || '' }); 
+                      if (e.target.value === 'NEW') {
+                        setRecipeForm({ ...recipeForm, output_product_id: 'NEW', output_product_name: '' });
+                      } else {
+                        const p = (products || []).find((x) => x?.id === e.target.value); 
+                        setRecipeForm({ ...recipeForm, output_product_id: e.target.value, output_product_name: p?.name || '' }); 
+                      }
                     }} 
-                    required
+                    required={recipeForm.output_product_id !== 'NEW'}
                     className="w-full p-2 border border-gray-200 rounded-lg"
                   >
                     <option value="">Seleccionar producto...</option>
+                    <option value="NEW" className="font-bold text-primary-600">+ Añadir Producto Nuevo Manualmente</option>
                     {(products || []).map((p) => <option key={p?.id} value={p?.id}>{p?.name}</option>)}
                   </select>
+                  {recipeForm.output_product_id === 'NEW' && (
+                    <div className="mt-3 p-3 bg-primary-50 border border-primary-100 rounded-lg animate-fade-in">
+                      <label className="block text-xs font-semibold text-primary-700 mb-1">Nombre del nuevo producto a crear:</label>
+                      <input 
+                        type="text" 
+                        value={recipeForm.output_product_name} 
+                        onChange={(e) => setRecipeForm({ ...recipeForm, output_product_name: e.target.value })} 
+                        required 
+                        className="w-full p-2 text-sm border border-primary-200 rounded-lg focus:ring-2 focus:ring-primary-500 outline-none"
+                        placeholder="Ej: Goma Secreta Lote B"
+                      />
+                      <p className="text-[10px] text-gray-500 mt-1">Se creará automáticamente en el inventario base.</p>
+                    </div>
+                  )}
                 </div>
                 <div>
                   <label className="block text-sm font-semibold mb-1">Cliente</label>
