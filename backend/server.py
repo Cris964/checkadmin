@@ -265,6 +265,11 @@ class WarehouseCreate(BaseModel):
     location: str
     description: Optional[str] = None
 
+class WarehouseUpdate(BaseModel):
+    name: Optional[str] = None
+    location: Optional[str] = None
+    description: Optional[str] = None
+
 class RecipeIngredient(BaseModel):
     raw_material_id: str
     raw_material_name: str
@@ -925,6 +930,24 @@ async def create_warehouse(warehouse_data: WarehouseCreate, current_user: dict =
     database = get_db()
     await database.warehouses.insert_one(warehouse_dict)
     return warehouse
+
+@api_router.put("/warehouses/{warehouse_id}", response_model=Warehouse)
+async def update_warehouse(warehouse_id: str, warehouse_data: WarehouseUpdate, current_user: dict = Depends(get_current_user)):
+    update_data = warehouse_data.model_dump(exclude_unset=True)
+    
+    database = get_db()
+    if update_data:
+        await database.warehouses.update_one(
+            {"id": warehouse_id, "company_id": current_user["company_id"]},
+            {"$set": update_data}
+        )
+    
+    warehouse_dict = await database.warehouses.find_one({"id": warehouse_id}, {"_id": 0})
+    if not warehouse_dict:
+        raise HTTPException(status_code=404, detail="Warehouse not found")
+    if isinstance(warehouse_dict['created_at'], str):
+        warehouse_dict['created_at'] = datetime.fromisoformat(warehouse_dict['created_at'])
+    return Warehouse(**warehouse_dict)
 
 @api_router.get("/warehouses/{warehouse_id}/products")
 async def get_warehouse_products(warehouse_id: str, current_user: dict = Depends(get_current_user)):
