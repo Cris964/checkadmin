@@ -1152,14 +1152,14 @@ async def advance_production_order(order_id: str, data: ProductionOrderAdvance, 
         if recipe:
             # 1. Subtract Ingredients
             for ing in recipe.get('ingredients', []):
-                qty = (ing['quantity'] * order['quantity']) / (recipe.get('expected_quantity') or 1)
+                qty = (ing['quantity'] * order.get('quantity', 1)) / (recipe.get('expected_quantity') or 1)
                 await database.raw_materials.update_one(
                     {"id": ing['raw_material_id'], "company_id": current_user["company_id"]},
                     {"$inc": {"current_stock": -qty}}
                 )
             
             # 2. Add Finished Product
-            qty_to_add = data.actual_output if data.actual_output is not None else order['quantity']
+            qty_to_add = data.actual_output if data.actual_output is not None else order.get('quantity', 1)
             await database.products.update_one(
                 {"id": recipe['output_product_id'], "company_id": current_user["company_id"]},
                 {"$inc": {"stock_current": qty_to_add}}

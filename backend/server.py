@@ -1003,14 +1003,14 @@ async def get_recipes(current_user: dict = Depends(get_current_user)):
     database = get_db()
     recipes = await database.recipes.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
     for r in recipes:
-        if isinstance(r['created_at'], str):
+        if isinstance(r.get('created_at'), str):
             r['created_at'] = datetime.fromisoformat(r['created_at'])
-        if 'ingredients' not in r:
+        if 'ingredients' not in r or r['ingredients'] is None:
             r['ingredients'] = []
-        if 'output_product_name' not in r:
+        if not r.get('output_product_name'):
             # Get product name if missing
             product = await database.products.find_one({"id": r.get('output_product_id')}, {"_id": 0})
-            r['output_product_name'] = product['name'] if product else "Unknown"
+            r['output_product_name'] = product['name'] if product else "Producto Desconocido"
     return recipes
 
 @api_router.post("/recipes", response_model=Recipe)
@@ -1057,10 +1057,17 @@ async def get_production_orders(current_user: dict = Depends(get_current_user)):
     database = get_db()
     orders = await database.production_orders.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
     for o in orders:
-        if isinstance(o['created_at'], str):
+        if isinstance(o.get('created_at'), str):
             o['created_at'] = datetime.fromisoformat(o['created_at'])
-        if isinstance(o['updated_at'], str):
+        if isinstance(o.get('updated_at'), str):
             o['updated_at'] = datetime.fromisoformat(o['updated_at'])
+        
+        # Ensure checklists exist for legacy orders
+        if 'checklist_alistamiento' not in o or o['checklist_alistamiento'] is None:
+            o['checklist_alistamiento'] = []
+        if 'checklist_procesamiento' not in o or o['checklist_procesamiento'] is None:
+            o['checklist_procesamiento'] = []
+            
     return orders
 
 @api_router.post("/production-orders", response_model=ProductionOrder)
@@ -1145,14 +1152,14 @@ async def advance_production_order(order_id: str, data: ProductionOrderAdvance, 
         if recipe:
             # 1. Subtract Ingredients
             for ing in recipe.get('ingredients', []):
-                qty = (ing['quantity'] * order['quantity']) / (recipe.get('expected_quantity') or 1)
+                qty = (ing['quantity'] * order.get('quantity', 1)) / (recipe.get('expected_quantity') or 1)
                 await database.raw_materials.update_one(
                     {"id": ing['raw_material_id'], "company_id": current_user["company_id"]},
                     {"$inc": {"current_stock": -qty}}
                 )
             
             # 2. Add Finished Product
-            qty_to_add = data.actual_output if data.actual_output is not None else order['quantity']
+            qty_to_add = data.actual_output if data.actual_output is not None else order.get('quantity', 1)
             await database.products.update_one(
                 {"id": recipe['output_product_id'], "company_id": current_user["company_id"]},
                 {"$inc": {"stock_current": qty_to_add}}
