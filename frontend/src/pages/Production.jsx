@@ -58,7 +58,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
           <List size={20} />
         </button>
         {nextStage && o.stage === 'montada' && (
-          <button onClick={() => advanceOrder(o.id, nextStage)} className="btn-primary text-xs px-4 py-2 font-bold uppercase tracking-wider">
+          <button onClick={() => advanceOrder(o.id || o._id, nextStage)} className="btn-primary text-xs px-4 py-2 font-bold uppercase tracking-wider">
             Alimentar <ChevronRight size={14} />
           </button>
         )}
@@ -120,7 +120,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                 </div>
                 <button 
                   disabled={!responsable || localChecklist.length < (recipe.ingredients?.length || 0)}
-                  onClick={() => advanceOrder(o.id, 'procesamiento', { 
+                  onClick={() => advanceOrder(o.id || o._id, 'procesamiento', { 
                     responsable_alistamiento: responsable,
                     checklist_alistamiento: (recipe.ingredients || []).map(ing => ({
                       material_id: ing.raw_material_id,
@@ -195,7 +195,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                 onClick={() => {
                   const actual = prompt("Cantidad final producida:", o.quantity);
                   if (actual) {
-                    advanceOrder(o.id, 'terminada', { 
+                    advanceOrder(o.id || o._id, 'terminada', { 
                       checklist_procesamiento: localChecklist.map(t => ({task: t, checked: true})),
                       responsable_procesamiento: responsable,
                       novedades: observations,
