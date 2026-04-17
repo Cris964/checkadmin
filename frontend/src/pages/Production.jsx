@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api, { getAssetUrl } from '../lib/api';
 import { toast } from 'sonner';
-import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2 } from 'lucide-react';
+import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2, Trash2 } from 'lucide-react';
 
 const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipes, rawMaterials, advanceOrder, expandedOrder, setExpandedOrder, warehouses, fmt }) => {
   const [localChecklist, setLocalChecklist] = useState([]);
