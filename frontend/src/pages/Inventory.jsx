@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api, { getAssetUrl } from '../lib/api';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Package, MapPin, X, Maximize2, ChevronDown, ChevronUp, Download, Upload, Search } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, MapPin, X, Maximize2, ChevronDown, ChevronUp, Download, Upload, Search, Eye, FileText } from 'lucide-react';
 
 export default function Inventory() {
   const [tab, setTab] = useState('products');
