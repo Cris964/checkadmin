@@ -1,5 +1,7 @@
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, status, UploadFile, File, Request
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
+import pandas as pd
+import io
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from fastapi.staticfiles import StaticFiles
 from dotenv import load_dotenv
@@ -69,6 +71,7 @@ class MockCollection:
     async def delete_one(self, q): return MockResult()
     async def count_documents(self, query): return 0
     def aggregate(self, pipeline): return MockCursor([])
+    async def create_index(self, keys, **kwargs): return "mock_index"
 
 class MockDB:
     def __init__(self):
@@ -141,6 +144,51 @@ COLOMBIAN_DATA = {
 @api_router.get("/constants/colombian-data")
 async def get_colombian_data():
     return COLOMBIAN_DATA
+
+# ==================== DB SETUP ====================
+
+async def setup_database_indexes():
+    """
+    Ensure essential MongoDB indexes exist on startup.
+    """
+    database = get_db()
+    if database is None or hasattr(database, 'users') and isinstance(database.users, MockCollection):
+        return # Skip for mock DB
+        
+    try:
+        # Users
+        await database.users.create_index("email", unique=True)
+        await database.users.create_index("id", unique=True)
+        await database.users.create_index("company_id")
+        
+        # Products
+        await database.products.create_index("id", unique=True)
+        await database.products.create_index("company_id")
+        
+        # Shifts & Sales
+        await database.cash_shifts.create_index("id", unique=True)
+        await database.cash_shifts.create_index([("company_id", 1), ("status", 1)])
+        await database.sales.create_index("id", unique=True)
+        await database.sales.create_index("company_id")
+        
+        # Employees & Payroll
+        await database.employees.create_index("id", unique=True)
+        await database.employees.create_index("company_id")
+        await database.payroll.create_index("id", unique=True)
+        await database.payroll.create_index("company_id")
+        
+        # Sale Items
+        await database.sale_items.create_index("company_id")
+        await database.sale_items.create_index("sale_id")
+        await database.sale_items.create_index("created_at")
+        
+        logging.info("Database indexes verified/created successfully")
+    except Exception as e:
+        logging.error(f"Error creating database indexes: {str(e)}")
+
+@app.on_event("startup")
+async def on_startup():
+    await setup_database_indexes()
 
 # ==================== MODELS ====================
 
@@ -911,6 +959,133 @@ async def delete_product(product_id: str, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=404, detail="Product not found")
     return {"message": "Product deleted"}
 
+# ==================== PRODUCT EXPORT/IMPORT ====================
+
+@api_router.get("/products/export")
+async def export_products(current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    products = await database.products.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(10000)
+    warehouses = await database.warehouses.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+    wh_map = {wh['id']: wh['name'] for wh in warehouses}
+    
+    data = []
+    for p in products:
+        data.append({
+            "SKU": p.get('sku', ''),
+            "Nombre": p.get('name', ''),
+            "Costo Compra": p.get('cost_buy', 0),
+            "Costo Venta": p.get('cost_sell', 0),
+            "Stock Actual": p.get('stock_current', 0),
+            "Stock Minimo": p.get('stock_min', 0),
+            "Fecha Vencimiento": p.get('expiry_date', ''),
+            "Bodega": wh_map.get(p.get('warehouse_id'), 'Sin asignar')
+        })
+    
+    df = pd.DataFrame(data)
+    output = io.BytesIO()
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, index=False, sheet_name='Productos')
+    
+    output.seek(0)
+    headers = {
+        'Content-Disposition': 'attachment; filename="productos_chekadmin.xlsx"'
+    }
+    return StreamingResponse(output, headers=headers, media_type='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet')
+
+@api_router.post("/products/import")
+async def import_products(file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+    if not file.filename.endswith(('.xlsx', '.xls')):
+        raise HTTPException(status_code=400, detail="Formato de archivo no válido. Use Excel (.xlsx)")
+    
+    try:
+        content = await file.read()
+        df = pd.read_excel(io.BytesIO(content))
+        
+        # Normalize column names (ignore case and spaces)
+        df.columns = [str(c).strip().lower() for c in df.columns]
+        
+        # Map essential columns
+        col_map = {
+            'sku': 'sku',
+            'nombre': 'name',
+            'costo compra': 'cost_buy',
+            'costo venta': 'cost_sell',
+            'stock actual': 'stock_current',
+            'stock minimo': 'stock_min',
+            'stock mínimo': 'stock_min',
+            'fecha vencimiento': 'expiry_date',
+            'bodega': 'warehouse_name'
+        }
+        
+        database = get_db()
+        warehouses = await database.warehouses.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(1000)
+        wh_name_map = {wh['name'].lower().strip(): wh['id'] for wh in warehouses}
+        
+        imported = 0
+        updated = 0
+        errors = []
+        
+        for index, row in df.iterrows():
+            try:
+                sku = str(row.get('sku', '')).strip()
+                if not sku or sku == 'nan':
+                    continue
+                
+                name = str(row.get('nombre', row.get('name', ''))).strip()
+                if not name or name == 'nan':
+                    errors.append(f"Fila {index+2}: Nombre faltante")
+                    continue
+                
+                # Fetch warehouse
+                wh_name = str(row.get('bodega', '')).strip().lower()
+                warehouse_id = wh_name_map.get(wh_name)
+                
+                product_data = {
+                    "sku": sku,
+                    "name": name,
+                    "cost_buy": float(row.get('costo compra', row.get('cost_buy', 0))),
+                    "cost_sell": float(row.get('costo venta', row.get('cost_sell', 0))),
+                    "stock_current": int(row.get('stock actual', row.get('stock_current', 0))),
+                    "stock_min": int(row.get('stock minimo', row.get('stock_min', 0))),
+                    "expiry_date": str(row.get('fecha vencimiento', row.get('expiry_date', ''))) if row.get('fecha vencimiento') and str(row.get('fecha vencimiento')) != 'nan' else None,
+                    "warehouse_id": warehouse_id,
+                    "company_id": current_user["company_id"]
+                }
+                
+                # Calculate profit percentage
+                if product_data['cost_buy'] > 0:
+                    product_data['profit_percentage'] = ((product_data['cost_sell'] - product_data['cost_buy']) / product_data['cost_buy']) * 100
+                else:
+                    product_data['profit_percentage'] = 0.0
+                
+                # Check if exists
+                existing = await database.products.find_one({"sku": sku, "company_id": current_user["company_id"]})
+                if existing:
+                    await database.products.update_one(
+                        {"id": existing['id']},
+                        {"$set": product_data}
+                    )
+                    updated += 1
+                else:
+                    new_id = str(uuid.uuid4())
+                    product_data["id"] = new_id
+                    product_data["created_at"] = datetime.now(timezone.utc).isoformat()
+                    await database.products.insert_one(product_data)
+                    imported += 1
+                    
+            except Exception as e:
+                errors.append(f"Fila {index+2}: {str(e)}")
+        
+        return {
+            "message": "Importación completada",
+            "imported": imported,
+            "updated": updated,
+            "errors": errors
+        }
+        
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error procesando archivo: {str(e)}")
+
 # ==================== WAREHOUSES ====================
 
 @api_router.get("/warehouses", response_model=List[Warehouse])
@@ -1327,6 +1502,8 @@ async def create_sale(sale_data: SaleCreate, current_user: dict = Depends(get_cu
         # Save sale item
         item_dict = item.model_dump()
         item_dict['company_id'] = current_user["company_id"]
+        item_dict['sale_id'] = sale.id # Link to sale
+        item_dict['created_at'] = sale.created_at.isoformat() # For easier querying
         await database.sale_items.insert_one(item_dict)
     
     # Calculate change if payment method is cash
@@ -2000,17 +2177,36 @@ async def get_today_sales_summary(current_user: dict = Depends(get_current_user)
     
     # Get best selling products today
     product_sales = {}
-    for sale in sales:
-        sale_items = await database.sale_items.find(
-            {"company_id": current_user["company_id"]},
+    
+    # Get all sale items for these sales to avoid N+1 queries
+    sale_ids = [s['id'] for s in sales]
+    all_today_items = []
+    if sale_ids:
+        all_today_items = await database.sale_items.find(
+            {
+                "company_id": current_user["company_id"],
+                "sale_id": {"$in": sale_ids}
+            },
             {"_id": 0}
-        ).to_list(1000)
-        for item in sale_items:
-            pid = item.get('product_id', 'unknown')
-            if pid not in product_sales:
-                product_sales[pid] = {"name": item.get('product_name', 'Unknown'), "quantity": 0, "total": 0}
-            product_sales[pid]["quantity"] += item.get('quantity', 0)
-            product_sales[pid]["total"] += item.get('subtotal', 0)
+        ).to_list(5000)
+    
+    # If no items found by sale_id (legacy data), try by date
+    if not all_today_items and sales:
+        all_today_items = await database.sale_items.find(
+            {
+                "company_id": current_user["company_id"],
+                "created_at": {"$gte": today_str}
+            },
+            {"_id": 0}
+        ).to_list(5000)
+
+    # Process items
+    for item in all_today_items:
+        pid = item.get('product_id', 'unknown')
+        if pid not in product_sales:
+            product_sales[pid] = {"name": item.get('product_name', 'Unknown'), "quantity": 0, "total": 0}
+        product_sales[pid]["quantity"] += item.get('quantity', 0)
+        product_sales[pid]["total"] += item.get('subtotal', 0)
     
     top_products = sorted(product_sales.values(), key=lambda x: x['total'], reverse=True)[:5]
     

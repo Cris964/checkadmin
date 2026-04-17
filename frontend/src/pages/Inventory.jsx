@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api from '../lib/api';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Package, MapPin, X, Eye, ChevronDown, ChevronUp } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, MapPin, X, Eye, ChevronDown, ChevronUp, Download, Upload, FileText } from 'lucide-react';
 
 export default function Inventory() {
   const [tab, setTab] = useState('products');
@@ -16,6 +16,9 @@ export default function Inventory() {
   const [whForm, setWhForm] = useState({ name: '', location: '', description: '' });
   const [editingWarehouse, setEditingWarehouse] = useState(null);
   const [managingWarehouse, setManagingWarehouse] = useState(null);
+  const [showImportModal, setShowImportModal] = useState(false);
+  const [importFile, setImportFile] = useState(null);
+  const [importing, setImporting] = useState(false);
 
   const loadData = async () => {
     const [p, w] = await Promise.all([
@@ -149,6 +152,61 @@ export default function Inventory() {
   const fmt = (n) => `$${(n || 0).toLocaleString('es-CO')}`;
   const getWarehouseName = (id) => (warehouses || []).find(w => w.id === id)?.name || '—';
 
+  const handleExport = async () => {
+    try {
+      const response = await api.get('products/export', { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', 'productos_chekadmin.xlsx');
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      toast.success('Excel exportado correctamente');
+    } catch (e) {
+      toast.error('Error al exportar inventario');
+    }
+  };
+
+  const handleImport = async (e) => {
+    e.preventDefault();
+    if (!importFile) return;
+    
+    setImporting(true);
+    const formData = new FormData();
+    formData.append('file', importFile);
+    
+    try {
+      const res = await api.post('products/import', formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      toast.success(`${res.data.message}: ${res.data.imported} creados, ${res.data.updated} actualizados`);
+      if (res.data.errors?.length > 0) {
+        console.warn('Errores en importación:', res.data.errors);
+        toast.info(`Se encontraron ${res.data.errors.length} errores menores.`);
+      }
+      setShowImportModal(false);
+      setImportFile(null);
+      loadData();
+    } catch (e) {
+      toast.error(e.response?.data?.detail || 'Error en la importación');
+    } finally {
+      setImporting(false);
+    }
+  };
+
+  const downloadTemplate = () => {
+    const headers = ["SKU", "Nombre", "Costo Compra", "Costo Venta", "Stock Actual", "Stock Minimo", "Fecha Vencimiento", "Bodega"];
+    const csvContent = "data:text/csv;charset=utf-8," + headers.join(",");
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement("a");
+    link.setAttribute("href", encodedUri);
+    link.setAttribute("download", "plantilla_inventario.csv");
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+  };
+
   return (
     <div className="space-y-5 animate-fade-in">
       <div className="flex items-start justify-between">
@@ -157,9 +215,17 @@ export default function Inventory() {
           <p className="text-xs tracking-widest text-gray-400 mt-1">GESTIÓN DE PRODUCTOS Y BODEGAS</p>
         </div>
         {tab === 'products' ? (
-          <button onClick={() => { setEditingProduct(null); setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '' }); setShowForm(true); }} className="btn-primary">
-            <Plus size={16} /> Nuevo Producto
-          </button>
+          <div className="flex gap-2">
+            <button onClick={handleExport} className="btn-secondary" title="Exportar a Excel">
+              <Download size={16} /> Exportar
+            </button>
+            <button onClick={() => setShowImportModal(true)} className="btn-secondary" title="Importar desde Excel">
+              <Upload size={16} /> Importar
+            </button>
+            <button onClick={() => { setEditingProduct(null); setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '' }); setShowForm(true); }} className="btn-primary">
+              <Plus size={16} /> Nuevo Producto
+            </button>
+          </div>
         ) : (
           <button onClick={() => { setEditingWarehouse(null); setWhForm({ name: '', location: '', description: '' }); setShowWarehouseForm(true); }} className="btn-primary">
             <Plus size={16} /> Nueva Bodega
@@ -421,6 +487,59 @@ export default function Inventory() {
                   )}
                 </div>
               </div>
+            </div>
+          </div>
+        </div>
+      )}
+      {/* Import Modal */}
+      {showImportModal && (
+        <div className="modal-overlay" onClick={() => setShowImportModal(false)}>
+          <div className="modal-content max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-xl font-bold">Importar Inventario</h3>
+              <button onClick={() => setShowImportModal(false)}><X size={20} /></button>
+            </div>
+            <div className="space-y-4">
+              <div className="p-4 bg-primary-50 rounded-lg border border-primary-100">
+                <p className="text-sm text-primary-800">
+                  Sube un archivo Excel (.xlsx) para actualizar o crear productos masivamente. Use el SKU como identificador único.
+                </p>
+                <button onClick={downloadTemplate} className="text-xs font-bold text-primary-600 mt-2 flex items-center gap-1 hover:underline">
+                  <FileText size={12} /> Descargar plantilla ejemplo
+                </button>
+              </div>
+              
+              <form onSubmit={handleImport} className="space-y-4">
+                <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 text-center hover:border-primary-400 transition-colors bg-gray-50">
+                  <input 
+                    type="file" 
+                    accept=".xlsx, .xls" 
+                    onChange={(e) => setImportFile(e.target.files[0])} 
+                    className="hidden" 
+                    id="excel-upload"
+                  />
+                  <label htmlFor="excel-upload" className="cursor-pointer">
+                    <div className="w-12 h-12 bg-white rounded-full flex items-center justify-center mx-auto shadow-sm mb-3">
+                      <Upload className="text-gray-400" />
+                    </div>
+                    <p className="text-sm font-medium text-gray-700">
+                      {importFile ? importFile.name : 'Haz clic para seleccionar archivo'}
+                    </p>
+                    <p className="text-xs text-gray-400 mt-1">Soporta .xlsx y .xls</p>
+                  </label>
+                </div>
+                
+                <div className="flex gap-3">
+                  <button type="button" onClick={() => setShowImportModal(false)} className="btn-secondary flex-1 justify-center">Cancelar</button>
+                  <button 
+                    type="submit" 
+                    disabled={!importFile || importing} 
+                    className="btn-primary flex-1 justify-center disabled:opacity-50"
+                  >
+                    {importing ? 'Importando...' : 'Iniciar Importación'}
+                  </button>
+                </div>
+              </form>
             </div>
           </div>
         </div>
