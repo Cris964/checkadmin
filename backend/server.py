@@ -1864,6 +1864,7 @@ async def get_caja_mayor(
     transactions = await database.transactions.find(query, {"_id": 0}).to_list(10000)
     total_caja_menor = sum(t['amount'] for t in transactions if t.get('type') == 'caja_menor')
     total_gastos = sum(t['amount'] for t in transactions if t.get('type') in ['pago', 'gasto'])
+    total_notas_credito = sum(t['amount'] for t in transactions if t.get('type') == 'nota_credito')
     gastos_fijos = sum(t['amount'] for t in transactions if t.get('category') == 'fijo')
     gastos_variables = sum(t['amount'] for t in transactions if t.get('category') == 'variable')
 
@@ -1871,6 +1872,7 @@ async def get_caja_mayor(
         "total_ingresos": total_ingresos,
         "total_caja_menor": total_caja_menor,
         "total_gastos": total_gastos,
+        "total_notas_credito": total_notas_credito,
         "gastos_fijos": gastos_fijos,
         "gastos_variables": gastos_variables,
         "balance": total_ingresos + total_caja_menor - total_gastos,
@@ -1895,6 +1897,7 @@ async def get_balance_general(current_user: dict = Depends(get_current_user)):
     transactions = await database.transactions.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
     total_gastos = sum(t['amount'] for t in transactions if t.get('type') in ['pago', 'gasto'])
     total_caja_menor = sum(t['amount'] for t in transactions if t.get('type') == 'caja_menor')
+    total_notas_credito = sum(t['amount'] for t in transactions if t.get('type') == 'nota_credito')
 
     # Payroll costs
     payroll = await database.payroll.find({"company_id": company_id}, {"_id": 0}).to_list(10000)
@@ -1903,7 +1906,8 @@ async def get_balance_general(current_user: dict = Depends(get_current_user)):
     return {
         "activos": {
             "inventario": inventory_value,
-            "caja": total_ventas + total_caja_menor - total_gastos - total_nomina
+            "caja": total_ventas + total_caja_menor - total_gastos - total_nomina,
+            "cuentas_por_cobrar": total_notas_credito
         },
         "ingresos": total_ventas,
         "egresos": {

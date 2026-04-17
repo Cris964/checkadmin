@@ -59,17 +59,21 @@ export default function Finance() {
 
   const cajaItems = transactions.filter((t) => t.type === 'caja_menor');
   const gastoItems = transactions.filter((t) => t.type === 'pago' || t.type === 'gasto');
+  const creditItems = transactions.filter((t) => t.type === 'nota_credito');
   const gastosFijos = gastoItems.filter(t => t.category === 'fijo');
   const gastosVariables = gastoItems.filter(t => t.category === 'variable');
   const totalCaja = cajaItems.reduce((s, t) => s + t.amount, 0);
   const totalGastos = gastoItems.reduce((s, t) => s + t.amount, 0);
+  const totalCreditos = creditItems.reduce((s, t) => s + t.amount, 0);
   const fmt = (n) => `$${(n || 0).toLocaleString('es-CO')}`;
 
   const getItems = () => {
     if (tab === 'caja_menor') return cajaItems;
     if (tab === 'gastos') return gastoItems;
+    if (tab === 'creditos') return creditItems;
     if (tab === 'fijos') return gastosFijos;
     if (tab === 'variables') return gastosVariables;
+    return [];
     return [];
   };
 
@@ -86,7 +90,7 @@ export default function Finance() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4">
         <div className="glass-card p-5 flex items-center justify-between stat-green">
           <div>
             <p className="text-xs font-semibold text-gray-500 tracking-wider">CAJA MENOR</p>
@@ -101,6 +105,13 @@ export default function Finance() {
           </div>
           <ArrowDownRight size={24} className="text-red-500 opacity-60" />
         </div>
+        <div className="glass-card p-5 flex items-center justify-between stat-blue">
+          <div>
+            <p className="text-xs font-semibold text-gray-500 tracking-wider">CRÉDITOS / FIADOS</p>
+            <p className="text-2xl font-bold text-gray-900 mt-1">{fmt(totalCreditos)}</p>
+          </div>
+          <Wallet size={24} className="text-blue-500 opacity-60" />
+        </div>
         <div className="glass-card p-5 flex items-center justify-between stat-yellow">
           <div>
             <p className="text-xs font-semibold text-gray-500 tracking-wider">GASTOS FIJOS</p>
@@ -108,12 +119,12 @@ export default function Finance() {
           </div>
           <PieChart size={24} className="text-yellow-600 opacity-60" />
         </div>
-        <div className="glass-card p-5 flex items-center justify-between stat-blue">
+        <div className="glass-card p-5 flex items-center justify-between bg-gray-50">
           <div>
-            <p className="text-xs font-semibold text-gray-500 tracking-wider">GASTOS VARIABLES</p>
+            <p className="text-xs font-semibold text-gray-500 tracking-wider">GASTOS VAR.</p>
             <p className="text-2xl font-bold text-gray-900 mt-1">{fmt(gastosVariables.reduce((s, t) => s + t.amount, 0))}</p>
           </div>
-          <BarChart3 size={24} className="text-blue-500 opacity-60" />
+          <BarChart3 size={24} className="text-gray-400 opacity-60" />
         </div>
       </div>
 
@@ -122,6 +133,7 @@ export default function Finance() {
         {[
           { key: 'caja_menor', label: 'Caja Menor' },
           { key: 'gastos', label: 'Pagos y Gastos' },
+          { key: 'creditos', label: 'Créditos / Fiados' },
           { key: 'fijos', label: 'Gastos Fijos' },
           { key: 'variables', label: 'Gastos Variables' },
           { key: 'caja_mayor', label: 'Caja Mayor' },
@@ -164,8 +176,12 @@ export default function Finance() {
                   <p className="text-xl font-bold text-red-600 mt-1">{fmt(cajaMayor.total_gastos)}</p>
                   <p className="text-xs text-gray-400">{cajaMayor.num_transacciones} transacciones</p>
                 </div>
+                <div className="p-4 bg-orange-50 rounded-xl text-center">
+                  <p className="text-xs text-gray-500 font-semibold tracking-wider">CRÉDITOS / FIADOS</p>
+                  <p className="text-xl font-bold text-orange-600 mt-1">{fmt(cajaMayor.total_notas_credito)}</p>
+                </div>
                 <div className="p-4 rounded-xl text-center" style={{ background: cajaMayor.balance >= 0 ? '#f0fdf4' : '#fef2f2' }}>
-                  <p className="text-xs text-gray-500 font-semibold tracking-wider">BALANCE</p>
+                  <p className="text-xs text-gray-500 font-semibold tracking-wider">BALANCE CAJA</p>
                   <p className={`text-xl font-bold mt-1 ${cajaMayor.balance >= 0 ? 'text-green-600' : 'text-red-600'}`}>{fmt(cajaMayor.balance)}</p>
                 </div>
               </div>
@@ -198,7 +214,8 @@ export default function Finance() {
                 <div className="space-y-2">
                   <div className="flex justify-between text-sm"><span className="text-gray-600">Inventario</span><span className="font-bold">{fmt(balance.activos?.inventario)}</span></div>
                   <div className="flex justify-between text-sm"><span className="text-gray-600">Caja</span><span className="font-bold">{fmt(balance.activos?.caja)}</span></div>
-                  <div className="border-t pt-2 flex justify-between text-sm font-bold"><span>Total Activos</span><span className="text-green-600">{fmt((balance.activos?.inventario || 0) + (balance.activos?.caja || 0))}</span></div>
+                  <div className="flex justify-between text-sm text-orange-600"><span className="text-gray-600 font-medium">Cuentas por Cobrar</span><span className="font-bold">{fmt(balance.activos?.cuentas_por_cobrar)}</span></div>
+                  <div className="border-t pt-2 flex justify-between text-sm font-bold"><span>Total Activos</span><span className="text-green-600">{fmt((balance.activos?.inventario || 0) + (balance.activos?.caja || 0) + (balance.activos?.cuentas_por_cobrar || 0))}</span></div>
                 </div>
               </div>
               {/* Ingresos */}
@@ -236,8 +253,8 @@ export default function Finance() {
             <div className="space-y-2">
               {getItems().map((t) => (
                 <div key={t.id} className="flex items-center gap-4 p-3 bg-gray-50 rounded-xl hover:bg-gray-100 transition-colors">
-                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'caja_menor' ? 'bg-green-100' : 'bg-red-100'}`}>
-                    {t.type === 'caja_menor' ? <ArrowUpRight size={16} className="text-green-600" /> : <ArrowDownRight size={16} className="text-red-600" />}
+                  <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${t.type === 'caja_menor' ? 'bg-green-100' : t.type === 'nota_credito' ? 'bg-orange-100' : 'bg-red-100'}`}>
+                    {t.type === 'caja_menor' ? <ArrowUpRight size={16} className="text-green-600" /> : <ArrowDownRight size={16} className={t.type === 'nota_credito' ? 'text-orange-600' : 'text-red-600'} />}
                   </div>
                   <div className="flex-1 min-w-0">
                     <p className="font-semibold text-gray-800 text-sm">{t.description}</p>
@@ -245,8 +262,8 @@ export default function Finance() {
                       {t.category && <span className={`ml-2 badge ${t.category === 'fijo' ? 'badge-yellow' : 'badge-blue'}`}>{t.category}</span>}
                     </p>
                   </div>
-                  <p className={`text-lg font-bold ${t.type === 'caja_menor' ? 'text-green-600' : 'text-red-600'}`}>
-                    {t.type === 'caja_menor' ? '+' : '-'}{fmt(t.amount)}
+                  <p className={`text-lg font-bold ${t.type === 'caja_menor' ? 'text-green-600' : t.type === 'nota_credito' ? 'text-orange-600' : 'text-red-600'}`}>
+                    {t.type === 'caja_menor' ? '+' : t.type === 'nota_credito' ? 'CR ' : '-'}{fmt(t.amount)}
                   </p>
                   <button onClick={() => deleteTransaction(t.id)} className="p-1.5 hover:bg-red-50 rounded-lg"><Trash2 size={14} className="text-red-400" /></button>
                 </div>
@@ -268,6 +285,7 @@ export default function Finance() {
                   <option value="caja_menor">Caja Menor</option>
                   <option value="pago">Pago</option>
                   <option value="gasto">Gasto</option>
+                  <option value="nota_credito">Nota de Crédito (Fiado)</option>
                 </select>
               </div>
               {(form.type === 'pago' || form.type === 'gasto') && (

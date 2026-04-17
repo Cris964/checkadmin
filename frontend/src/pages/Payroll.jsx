@@ -58,7 +58,7 @@ export default function Payroll() {
       }
 
       if (results[2].status === 'fulfilled') {
-        setColombianData(results[2].value.data);
+        setColombianData(prev => ({ ...prev, ...results[2].value.data }));
       }
     } catch (err) {
       console.error("Unexpected error in loadData:", err);

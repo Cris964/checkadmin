@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import api from '../lib/api';
+import api, { getAssetUrl } from '../lib/api';
 import { toast } from 'sonner';
-import { Plus, Pencil, Trash2, Package, MapPin, X, Eye, ChevronDown, ChevronUp, Download, Upload, FileText } from 'lucide-react';
+import { Plus, Pencil, Trash2, Package, MapPin, X, Maximize2, ChevronDown, ChevronUp, Download, Upload, Search } from 'lucide-react';
 
 export default function Inventory() {
   const [tab, setTab] = useState('products');
@@ -19,6 +19,7 @@ export default function Inventory() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importFile, setImportFile] = useState(null);
   const [importing, setImporting] = useState(false);
+  const [lightboxImage, setLightboxImage] = useState(null);
 
   const loadData = async () => {
     const [p, w] = await Promise.all([
@@ -266,9 +267,25 @@ export default function Inventory() {
           ) : (
             <div className="overflow-x-auto">
               {products.map((p) => (
-                <div key={p.id} className="data-row gap-4">
-                  <div className="w-14 h-14 bg-gray-100 rounded-lg flex items-center justify-center flex-shrink-0 overflow-hidden">
-                    {p.image_url && typeof p.image_url === 'string' ? <img src={p.image_url.startsWith('http') ? p.image_url : `https://checkadmin-api.onrender.com${p.image_url}`} alt={p.name} className="w-full h-full object-cover rounded-lg" /> : <Package size={24} className="text-gray-300" />}
+                <div key={p.id} className="data-row gap-4 group">
+                  <div 
+                    className="w-20 h-20 bg-gray-100 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden cursor-pointer relative group-hover:shadow-lg transition-all"
+                    onClick={() => p.image_url && setLightboxImage(getAssetUrl(p.image_url))}
+                  >
+                    {p.image_url && typeof p.image_url === 'string' ? (
+                      <>
+                        <img 
+                          src={getAssetUrl(p.image_url)} 
+                          alt={p.name} 
+                          className="w-full h-full object-cover rounded-xl group-hover:scale-110 transition-transform duration-300" 
+                        />
+                        <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 flex items-center justify-center transition-colors">
+                          <Maximize2 size={20} className="text-white opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      </>
+                    ) : (
+                      <Package size={32} className="text-gray-300" />
+                    )}
                   </div>
                   <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 flex-1 items-start sm:items-center gap-4">
                     <div>
@@ -541,6 +558,24 @@ export default function Inventory() {
                 </div>
               </form>
             </div>
+          </div>
+        </div>
+      )}
+      {/* Lightbox Modal */}
+      {lightboxImage && (
+        <div className="modal-overlay z-[100]" onClick={() => setLightboxImage(null)}>
+          <div className="relative max-w-4xl w-full p-4" onClick={(e) => e.stopPropagation()}>
+            <button 
+              onClick={() => setLightboxImage(null)}
+              className="absolute -top-12 right-0 p-2 text-white hover:text-gray-300 transition-colors"
+            >
+              <X size={32} />
+            </button>
+            <img 
+              src={lightboxImage} 
+              alt="Preview" 
+              className="w-full h-auto rounded-2xl shadow-2xl animate-scale-in"
+            />
           </div>
         </div>
       )}

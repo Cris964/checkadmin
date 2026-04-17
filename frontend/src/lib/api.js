@@ -1,8 +1,18 @@
 import axios from 'axios';
 
-const API_URL = window.location.hostname === 'localhost' 
-  ? 'http://localhost:8000/api' 
-  : 'https://checkadmin-api.onrender.com/api';
+const BASE_URL = window.location.hostname === 'localhost' 
+  ? 'http://localhost:8000' 
+  : 'https://checkadmin-api.onrender.com';
+
+const API_URL = `${BASE_URL}/api`;
+
+export const getAssetUrl = (path) => {
+  if (!path) return null;
+  if (path.startsWith('http')) return path;
+  const cleanPath = path.startsWith('/') ? path : `/${path}`;
+  return `${BASE_URL}${cleanPath}`;
+};
+
 const api = axios.create({
   baseURL: API_URL.endsWith('/') ? API_URL : `${API_URL}/`,
   headers: { 'Content-Type': 'application/json' },

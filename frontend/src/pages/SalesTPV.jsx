@@ -1,5 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
-import api from '../lib/api';
+import api, { getAssetUrl } from '../lib/api';
 import { toast } from 'sonner';
 import { DollarSign, CreditCard, Receipt, Banknote, Search, ShoppingCart, Plus, Minus, History, X, Package, Printer, Mail, Users2, Pencil, Trash2 } from 'lucide-react';
 
@@ -23,7 +23,7 @@ export default function SalesTPV() {
   const [customerEmail, setCustomerEmail] = useState('');
   const [sendingEmail, setSendingEmail] = useState(false);
   const [colombianData, setColombianData] = useState({ 
-    banks: ["Bancolombia", "Davivienda", "Banco de Bogotá", "Banco de Occidente", "BBVA", "Scotiabank Colpatria", "Banco Caja Social", "Banco Agrario", "Banco AV Villas", "Nequi", "Daviplata", "OTRO"] 
+    banks: ["Bancolombia", "Davivienda", "Banco de Bogotá", "Banco de Occidente", "BBVA", "Scotiabank Colpatria", "Banco Caja Social", "Banco Agrario", "Banco AV Villas", "Nequi", "Daviplata", "Lulo Bank", "Nu Colombia", "RappiPay", "OTRO"] 
   });
   const [paymentDetails, setPaymentDetails] = useState({ type: 'debito', franchise: '', bank: '', voucher_number: '' });
   const [salesHistory, setSalesHistory] = useState([]);
@@ -59,7 +59,7 @@ export default function SalesTPV() {
       if (results[0].status === 'fulfilled') setShift(results[0].value.data);
       if (results[1].status === 'fulfilled') setProducts(results[1].value.data);
       if (results[2].status === 'fulfilled') setSummary(results[2].value.data);
-      if (results[3].status === 'fulfilled') setColombianData(results[3].value.data);
+      if (results[3].status === 'fulfilled') setColombianData(prev => ({ ...prev, ...results[3].value.data }));
       if (results[4].status === 'fulfilled') setSalesHistory(results[4].value.data);
       if (results[5].status === 'fulfilled') setUsers(results[5].value.data);
     } catch (e) { console.error(e); }
@@ -394,7 +394,7 @@ export default function SalesTPV() {
                     {filtered.map((p) => (
                       <div key={p.id} onClick={() => addToCart(p)} className="glass-card p-3 cursor-pointer hover:scale-[1.02] transition-transform">
                         <div className="bg-gray-100 rounded-lg h-28 flex items-center justify-center mb-2 overflow-hidden">
-                          {p.image_url ? <img src={p.image_url} alt={p.name} className="h-full w-full object-cover rounded-lg" /> : <Package size={32} className="text-gray-300" />}
+                          {p.image_url ? <img src={getAssetUrl(p.image_url)} alt={p.name} className="h-full w-full object-cover rounded-lg" /> : <Package size={32} className="text-gray-300" />}
                         </div>
                         <p className="font-semibold text-gray-800 text-sm truncate">{p.name}</p>
                         <p className="text-xs text-gray-400">{p.sku}</p>
