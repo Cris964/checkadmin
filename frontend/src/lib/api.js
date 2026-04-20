@@ -14,7 +14,7 @@ export const getAssetUrl = (path) => {
 };
 
 const api = axios.create({
-  baseURL: API_URL.endsWith('/') ? API_URL : `${API_URL}/`,
+  baseURL: `${BASE_URL}/api`,
   headers: { 'Content-Type': 'application/json' },
 });
 

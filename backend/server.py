@@ -98,7 +98,7 @@ def get_db():
 
 # Create the main app
 app = FastAPI()
-api_router = APIRouter(prefix="/api")
+api_router = APIRouter(prefix="/api", redirect_slashes=False)
 
 @app.middleware("http")
 async def demo_user_readonly_middleware(request: Request, call_next):
@@ -999,7 +999,9 @@ async def import_products(file: UploadFile = File(...), current_user: dict = Dep
     
     try:
         content = await file.read()
+        print(f"IMPORT: Processing file {file.filename}, size: {len(content)} bytes")
         df = pd.read_excel(io.BytesIO(content))
+        print(f"IMPORT: Loaded {len(df)} rows from Excel")
         
         # Normalize column names (ignore case and spaces)
         df.columns = [str(c).strip().lower() for c in df.columns]
