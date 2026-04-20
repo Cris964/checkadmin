@@ -178,7 +178,7 @@ export default function Inventory() {
     formData.append('file', importFile);
     
     try {
-      const res = await api.post('/products/import', formData, {
+      const res = await api.post('products/import', formData, {
         headers: { 'Content-Type': 'multipart/form-data' }
       });
       toast.success(`${res.data.message}: ${res.data.imported} creados, ${res.data.updated} actualizados`);

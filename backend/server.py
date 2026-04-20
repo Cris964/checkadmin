@@ -98,7 +98,7 @@ def get_db():
 
 # Create the main app
 app = FastAPI()
-api_router = APIRouter(prefix="/api", redirect_slashes=False)
+api_router = APIRouter(prefix="/api")
 
 @app.middleware("http")
 async def demo_user_readonly_middleware(request: Request, call_next):
