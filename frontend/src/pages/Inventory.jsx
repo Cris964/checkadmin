@@ -77,9 +77,7 @@ export default function Inventory() {
         if (selectedFile && productId) {
           const formData = new FormData();
           formData.append('file', selectedFile);
-          await api.post(`upload/product-image/${productId}`, formData, {
-            headers: { 'Content-Type': 'multipart/form-data' }
-          });
+          await api.post(`upload/product-image/${productId}`, formData);
         }
 
         setShowForm(false);
@@ -178,9 +176,7 @@ export default function Inventory() {
     formData.append('file', importFile);
     
     try {
-      const res = await api.post('products/import', formData, {
-        headers: { 'Content-Type': 'multipart/form-data' }
-      });
+      const res = await api.post('products/import', formData);
       toast.success(`${res.data.message}: ${res.data.imported} creados, ${res.data.updated} actualizados`);
       if (res.data.errors?.length > 0) {
         console.warn('Errores en importación:', res.data.errors);
