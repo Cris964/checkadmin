@@ -281,7 +281,7 @@ export default function Production() {
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', purchase_price: '', purchase_quantity: '', purchase_unit_measure: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' });
   const [recipeForm, setRecipeForm] = useState({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', ingredients: [] });
-  const [newIngredient, setNewIngredient] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg' });
+  const [newIngredient, setNewIngredient] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg', purchase_price: 0, purchase_quantity: 1, purchase_unit: 'kg' });
   const [uploading, setUploading] = useState(false);
   const [selectedRecipeFile, setSelectedRecipeFile] = useState(null);
   const [selectedMaterialFile, setSelectedMaterialFile] = useState(null);
@@ -420,7 +420,7 @@ export default function Production() {
   const addIngredient = () => {
     if (!newIngredient.raw_material_id || !newIngredient.quantity) return;
     setRecipeForm({ ...recipeForm, ingredients: [...recipeForm.ingredients, { ...newIngredient, quantity: parseFloat(newIngredient.quantity) || 0 }] });
-    setNewIngredient({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg' });
+    setNewIngredient({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg', purchase_price: 0, purchase_quantity: 1, purchase_unit: 'kg' });
   };
 
   const createMaterial = async (e) => {
@@ -499,8 +499,11 @@ export default function Production() {
   const calcKitCost = (recipe) => {
     if (!recipe?.ingredients) return 0;
     return recipe.ingredients.reduce((total, ing) => {
+      // Use ingredient specific cost if available, otherwise fallback to material
       const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
-      return total + (ing.quantity * (mat?.cost_per_unit || 0));
+      const fallbackCpu = mat?.cost_per_unit || 0;
+      const cpu = ing.purchase_price ? (ing.purchase_price / (ing.purchase_quantity || 1)) : fallbackCpu;
+      return total + (ing.quantity * cpu);
     }, 0);
   };
 
@@ -831,27 +834,13 @@ export default function Production() {
               </div>
               <div className="border-t pt-3">
                 <p className="text-sm font-semibold mb-2">Ingredientes ({recipeForm.ingredients.length})</p>
-                <div className="space-y-2 max-h-40 overflow-y-auto pr-2">
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                   {(recipeForm.ingredients || []).map((ing, i) => {
-                    const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
+                    const cpu = (ing.purchase_price || 0) / (ing.purchase_quantity || 1);
                     return (
-                      <div key={i} className="flex items-center gap-2 p-2 bg-gray-50 rounded-lg">
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-bold truncate">{ing.raw_material_name}</p>
-                          <p className="text-[10px] text-gray-500">{fmt(ing.quantity * (mat?.cost_per_unit || 0))}</p>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <input 
-                            type="number" 
-                            className="w-16 p-1 text-xs border rounded"
-                            value={ing.quantity}
-                            onChange={(e) => {
-                              const newIngs = [...recipeForm.ingredients];
-                              newIngs[i].quantity = parseFloat(e.target.value) || 0;
-                              setRecipeForm({ ...recipeForm, ingredients: newIngs });
-                            }}
-                          />
-                          <span className="text-[10px] text-gray-400 w-6">{ing.unit}</span>
+                      <div key={i} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-sm font-bold text-gray-800">{ing.raw_material_name}</p>
                           <button 
                             type="button" 
                             onClick={() => {
@@ -859,30 +848,89 @@ export default function Production() {
                               newIngs.splice(i, 1);
                               setRecipeForm({ ...recipeForm, ingredients: newIngs });
                             }}
-                            className="p-1 text-red-400 hover:text-red-600"
+                            className="p-1 text-red-400 hover:bg-red-50 rounded"
                           >
-                            <Trash2 size={14} />
+                            <Trash2 size={16} />
                           </button>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Precio Compra</label>
+                            <input 
+                              type="number" 
+                              className="w-full p-1.5 text-xs border rounded bg-white"
+                              value={ing.purchase_price}
+                              onChange={(e) => {
+                                const newIngs = [...recipeForm.ingredients];
+                                newIngs[i].purchase_price = parseFloat(e.target.value) || 0;
+                                setRecipeForm({ ...recipeForm, ingredients: newIngs });
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Cant. Compra</label>
+                            <div className="flex">
+                              <input 
+                                type="number" 
+                                className="w-full p-1.5 text-xs border rounded-l bg-white"
+                                value={ing.purchase_quantity}
+                                onChange={(e) => {
+                                  const newIngs = [...recipeForm.ingredients];
+                                  newIngs[i].purchase_quantity = parseFloat(e.target.value) || 1;
+                                  setRecipeForm({ ...recipeForm, ingredients: newIngs });
+                                }}
+                              />
+                              <span className="bg-gray-200 border border-l-0 text-[10px] px-2 flex items-center rounded-r text-gray-600">{ing.purchase_unit || 'u'}</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Cant. Receta</label>
+                            <div className="flex">
+                              <input 
+                                type="number" 
+                                className="w-full p-1.5 text-xs border rounded-l bg-white"
+                                value={ing.quantity}
+                                onChange={(e) => {
+                                  const newIngs = [...recipeForm.ingredients];
+                                  newIngs[i].quantity = parseFloat(e.target.value) || 0;
+                                  setRecipeForm({ ...recipeForm, ingredients: newIngs });
+                                }}
+                              />
+                              <span className="bg-gray-200 border border-l-0 text-[10px] px-2 flex items-center rounded-r text-gray-600">{ing.unit}</span>
+                            </div>
+                          </div>
+                          <div className="bg-primary-50 rounded border border-primary-100 p-1.5 flex flex-col justify-center">
+                            <label className="block text-[9px] font-bold text-primary-600 uppercase">Costo en Receta</label>
+                            <p className="font-bold text-sm text-primary-700">{fmt(ing.quantity * cpu)}</p>
+                          </div>
                         </div>
                       </div>
                     );
                   })}
                 </div>
                 
-                <div className="flex gap-2 mt-3">
+                <div className="flex flex-col sm:flex-row gap-2 mt-4 p-3 bg-white border border-gray-200 rounded-lg">
                   <select 
                     value={newIngredient.raw_material_id} 
                     onChange={(e) => { 
                       const m = (rawMaterials || []).find((x) => x?.id === e.target.value); 
-                      setNewIngredient({ ...newIngredient, raw_material_id: e.target.value, raw_material_name: m?.name || '', unit: m?.unit || 'kg' }); 
+                      setNewIngredient({ 
+                        ...newIngredient, 
+                        raw_material_id: e.target.value, 
+                        raw_material_name: m?.name || '', 
+                        unit: m?.unit || 'kg',
+                        purchase_price: m?.purchase_price || 0,
+                        purchase_quantity: m?.purchase_quantity || 1,
+                        purchase_unit: m?.purchase_unit_measure || m?.unit || 'kg'
+                      }); 
                     }} 
-                    className="flex-1 text-xs"
+                    className="flex-1 text-sm p-2 border rounded"
                   >
                     <option value="">Añadir material...</option>
                     {(rawMaterials || []).map((m) => <option key={m?.id} value={m?.id}>{m?.name}</option>)}
                   </select>
-                  <input type="number" placeholder="Cant." value={newIngredient.quantity} onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })} className="w-16 text-xs" />
-                  <button type="button" onClick={addIngredient} className="btn-primary p-2"><Plus size={14} /></button>
+                  <input type="number" placeholder="Cant. usada" value={newIngredient.quantity} onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })} className="w-24 text-sm p-2 border rounded" />
+                  <button type="button" onClick={addIngredient} className="btn-primary p-2 whitespace-nowrap"><Plus size={16} className="inline mr-1"/> Añadir</button>
                 </div>
 
                 {recipeForm.ingredients.length > 0 && (() => {
@@ -890,7 +938,9 @@ export default function Production() {
                   const expectedQty = parseFloat(recipeForm.expected_quantity) || 1;
                   const totalCost = recipeForm.ingredients.reduce((acc, ing) => {
                     const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
-                    return acc + (ing.quantity * (mat?.cost_per_unit || 0));
+                    const fallbackCpu = mat?.cost_per_unit || 0;
+                    const cpu = ing.purchase_price ? (ing.purchase_price / (ing.purchase_quantity || 1)) : fallbackCpu;
+                    return acc + (ing.quantity * cpu);
                   }, 0);
                   
                   return (

@@ -323,6 +323,9 @@ class RecipeIngredient(BaseModel):
     raw_material_name: str
     quantity: float
     unit: str  # kg, g, L, ml, unidades
+    purchase_price: Optional[float] = 0.0
+    purchase_quantity: Optional[float] = 1.0
+    purchase_unit: Optional[str] = None
 
 class Recipe(BaseModel):
     model_config = ConfigDict(extra="ignore")
