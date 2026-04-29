@@ -355,6 +355,9 @@ class RawMaterial(BaseModel):
     current_stock: float
     min_stock: float
     unit: str  # kg, g, L, ml, unidades
+    purchase_price: Optional[float] = 0.0
+    purchase_quantity: Optional[float] = 1.0
+    purchase_unit_measure: Optional[str] = None
     cost_per_unit: float
     supplier: Optional[str] = None
     lote: Optional[str] = None
@@ -368,6 +371,9 @@ class RawMaterialCreate(BaseModel):
     current_stock: float
     min_stock: float
     unit: str
+    purchase_price: Optional[float] = 0.0
+    purchase_quantity: Optional[float] = 1.0
+    purchase_unit_measure: Optional[str] = None
     cost_per_unit: float
     supplier: Optional[str] = None
     lote: Optional[str] = None
@@ -380,6 +386,9 @@ class RawMaterialUpdate(BaseModel):
     current_stock: Optional[float] = None
     min_stock: Optional[float] = None
     unit: Optional[str] = None
+    purchase_price: Optional[float] = None
+    purchase_quantity: Optional[float] = None
+    purchase_unit_measure: Optional[str] = None
     cost_per_unit: Optional[float] = None
     supplier: Optional[str] = None
     lote: Optional[str] = None

@@ -279,7 +279,7 @@ export default function Production() {
   const [orderQuantity, setOrderQuantity] = useState(1);
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
   const [expandedOrder, setExpandedOrder] = useState(null);
-  const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' });
+  const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', purchase_price: '', purchase_quantity: '', purchase_unit_measure: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' });
   const [recipeForm, setRecipeForm] = useState({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', ingredients: [] });
   const [newIngredient, setNewIngredient] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg' });
   const [uploading, setUploading] = useState(false);
@@ -430,6 +430,8 @@ export default function Production() {
       ...materialForm, 
       current_stock: parseFloat(materialForm.current_stock) || 0, 
       min_stock: parseFloat(materialForm.min_stock) || 0, 
+      purchase_price: parseFloat(materialForm.purchase_price) || 0,
+      purchase_quantity: parseFloat(materialForm.purchase_quantity) || 1,
       cost_per_unit: parseFloat(materialForm.cost_per_unit) || 0,
       warehouse_id: materialForm.warehouse_id || null
     };
@@ -457,7 +459,7 @@ export default function Production() {
       setShowMaterialForm(false); 
       setEditingMaterial(null);
       setSelectedMaterialFile(null);
-      setMaterialForm({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' }); 
+      setMaterialForm({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', purchase_price: '', purchase_quantity: '', purchase_unit_measure: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' }); 
       loadData();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al guardar materia prima');
@@ -474,6 +476,9 @@ export default function Production() {
       current_stock: m.current_stock,
       min_stock: m.min_stock,
       unit: m.unit,
+      purchase_price: m.purchase_price || '',
+      purchase_quantity: m.purchase_quantity || '',
+      purchase_unit_measure: m.purchase_unit_measure || m.unit,
       cost_per_unit: m.cost_per_unit,
       supplier: m.supplier || '',
       lote: m.lote || '',
@@ -931,8 +936,23 @@ export default function Production() {
                   <select value={materialForm.unit} onChange={(e) => setMaterialForm({ ...materialForm, unit: e.target.value })}>{['kg','g','L','ml','unidades'].map((u) => <option key={u}>{u}</option>)}</select>
                 </div>
               </div>
+              <div className="grid grid-cols-3 gap-3 pb-2">
+                <div><label className="block text-sm font-semibold mb-1">Precio Compra ($)</label><input type="number" step="0.01" value={materialForm.purchase_price} onChange={(e) => {
+                  const val = parseFloat(e.target.value) || 0;
+                  const qty = parseFloat(materialForm.purchase_quantity) || 1;
+                  setMaterialForm({ ...materialForm, purchase_price: e.target.value, cost_per_unit: (val / qty).toFixed(2) });
+                }} required /></div>
+                <div><label className="block text-sm font-semibold mb-1">Cant. Compra</label><input type="number" step="0.01" value={materialForm.purchase_quantity} onChange={(e) => {
+                  const qty = parseFloat(e.target.value) || 1;
+                  const val = parseFloat(materialForm.purchase_price) || 0;
+                  setMaterialForm({ ...materialForm, purchase_quantity: e.target.value, cost_per_unit: (val / qty).toFixed(2) });
+                }} required /></div>
+                <div><label className="block text-sm font-semibold mb-1">Unidad Compra</label>
+                  <select value={materialForm.purchase_unit_measure} onChange={(e) => setMaterialForm({ ...materialForm, purchase_unit_measure: e.target.value })}>{['kg','g','L','ml','unidades'].map((u) => <option key={u}>{u}</option>)}</select>
+                </div>
+              </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-sm font-semibold mb-1">Costo/Unidad</label><input type="number" step="0.01" value={materialForm.cost_per_unit} onChange={(e) => setMaterialForm({ ...materialForm, cost_per_unit: e.target.value })} required /></div>
+                <div><label className="block text-sm font-semibold mb-1">Costo/U (Automático)</label><input type="number" step="0.01" value={materialForm.cost_per_unit} onChange={(e) => setMaterialForm({ ...materialForm, cost_per_unit: e.target.value })} required readOnly className="bg-gray-100 cursor-not-allowed text-gray-600 font-bold" /></div>
                 <div><label className="block text-sm font-semibold mb-1">Proveedor</label><input value={materialForm.supplier} onChange={(e) => setMaterialForm({ ...materialForm, supplier: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3 pb-2">
