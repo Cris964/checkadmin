@@ -611,9 +611,12 @@ export default function Production() {
                       </div>
                     </div>
                     {kitCost > 0 && (
-                      <div className="flex items-center gap-1 text-sm bg-primary-50 px-2 py-1 rounded-full">
-                        <DollarSign size={14} className="text-primary-500" />
-                        <span className="font-bold text-primary-600">{fmt(kitCost)}</span>
+                      <div className="flex flex-col items-end">
+                        <div className="flex items-center gap-1 text-sm bg-primary-50 px-2 py-1 rounded-full">
+                          <DollarSign size={14} className="text-primary-500" />
+                          <span className="font-bold text-primary-600">{fmt(kitCost / (r.expected_quantity || 1))} /u</span>
+                        </div>
+                        <span className="text-[10px] text-gray-400 mt-1">Lote: {fmt(kitCost)}</span>
                       </div>
                     )}
                   </div>
@@ -944,7 +947,7 @@ export default function Production() {
                   }, 0);
                   
                   return (
-                    <div className="mt-4 p-3 bg-primary-50 rounded-xl border border-primary-100 space-y-1">
+                    <div className="mt-4 p-3 bg-primary-50 rounded-xl border border-primary-100 space-y-2">
                       <div className="flex justify-between text-xs font-bold text-primary-700">
                         <span>TOTAL INSUMOS:</span>
                         <span>{totalQty.toFixed(2)}</span>
@@ -953,9 +956,13 @@ export default function Production() {
                         <span>PESO POR UNIDAD:</span>
                         <span>{(totalQty / expectedQty).toFixed(2)}</span>
                       </div>
-                      <div className="flex justify-between text-sm font-black text-primary-800 pt-1 border-t border-primary-200 mt-1">
-                        <span>COSTO TOTAL KIT:</span>
+                      <div className="flex justify-between text-sm font-black text-primary-800 pt-2 border-t border-primary-200 mt-2">
+                        <span>COSTO TOTAL LOTE ({expectedQty} u):</span>
                         <span>{fmt(totalCost)}</span>
+                      </div>
+                      <div className="flex justify-between text-lg font-black text-green-700 bg-green-100 p-2 rounded-lg border border-green-300">
+                        <span>COSTO POR UNIDAD:</span>
+                        <span>{fmt(totalCost / expectedQty)}</span>
                       </div>
                     </div>
                   );
