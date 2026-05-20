@@ -488,13 +488,18 @@ export default function Production() {
 
   const createPurchaseInvoice = async () => {
     try {
-      await api.post('purchase-invoices', invoiceForm);
+      const payload = {
+        ...invoiceForm,
+        quantity: parseFloat(invoiceForm.quantity) || 0,
+        unit_price: parseFloat(invoiceForm.unit_price) || 0
+      };
+      await api.post('purchase-invoices', payload);
       toast.success('Factura registrada y stock actualizado');
       setShowInvoiceForm(false);
       setInvoiceForm({ raw_material_id: '', quantity: '', unit_price: '', supplier: '', invoice_number: '' });
       loadData();
     } catch (e) {
-      toast.error('Error al registrar factura');
+      toast.error(e.response?.data?.detail || 'Error al registrar factura');
     }
   };
 
