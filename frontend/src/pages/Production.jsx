@@ -555,6 +555,17 @@ export default function Production() {
   const getRecipeForOrder = (order) => (recipes || []).find(r => r?.id === order?.recipe_id);
   const fmt = (n) => `$${Math.round(n || 0).toLocaleString('es-CO')}`;
 
+  const getConversionFactor = (fromU, toU) => {
+    const p = fromU?.toLowerCase() || '';
+    const r = toU?.toLowerCase() || '';
+    if (p === r) return 1;
+    if (p === 'kg' && r === 'g') return 1000;
+    if (p === 'g' && r === 'kg') return 0.001;
+    if (p === 'l' && r === 'ml') return 1000;
+    if (p === 'ml' && r === 'l') return 0.001;
+    return 1;
+  };
+
   // Calculate kit cost
   const calcKitCost = (recipe) => {
     if (!recipe?.ingredients) return 0;
@@ -1158,7 +1169,16 @@ export default function Production() {
                           </div>
                           <div className="bg-primary-50 rounded border border-primary-100 p-1.5 flex flex-col justify-center">
                             <label className="block text-[9px] font-bold text-primary-600 uppercase">Costo en Receta</label>
-                            <p className="font-bold text-sm text-primary-700">{fmt(ing.quantity * cpu)}</p>
+                            <p className="font-bold text-sm text-primary-700">
+                              {(() => {
+                                const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
+                                const fallbackCpu = mat?.cost_per_unit || 0;
+                                const baseCpu = ing.purchase_price ? (ing.purchase_price / (ing.purchase_quantity || 1)) : fallbackCpu;
+                                const factor = getConversionFactor(ing.purchase_unit || mat?.unit, ing.unit);
+                                const cpu = baseCpu / factor;
+                                return fmt(ing.quantity * cpu);
+                              })()}
+                            </p>
                           </div>
                         </div>
                       </div>
@@ -1166,7 +1186,7 @@ export default function Production() {
                   })}
                 </div>
                 
-                <div className="flex flex-col sm:flex-row gap-2 mt-4 p-3 bg-white border border-gray-200 rounded-lg">
+                <div className="flex flex-col sm:flex-row gap-2 mt-4 p-3 bg-white border border-gray-200 rounded-lg items-center">
                   <select 
                     value={newIngredient.raw_material_id} 
                     onChange={(e) => { 
@@ -1176,17 +1196,42 @@ export default function Production() {
                         raw_material_id: e.target.value, 
                         raw_material_name: m?.name || '', 
                         unit: m?.unit || 'kg',
-                        purchase_price: m?.purchase_price || 0,
+                        purchase_price: m?.purchase_price || m?.cost_per_unit || 0,
                         purchase_quantity: m?.purchase_quantity || 1,
                         purchase_unit: m?.purchase_unit_measure || m?.unit || 'kg'
                       }); 
                     }} 
-                    className="flex-1 text-sm p-2 border rounded"
+                    className="flex-1 text-sm p-2 border rounded min-w-[150px]"
                   >
                     <option value="">Añadir material...</option>
                     {(rawMaterials || []).map((m) => <option key={m?.id} value={m?.id}>{m?.name}</option>)}
                   </select>
-                  <input type="number" placeholder="Cant. usada" value={newIngredient.quantity} onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })} className="w-24 text-sm p-2 border rounded" />
+                  
+                  <div className="flex items-center gap-1">
+                    <input type="number" placeholder="Cant." value={newIngredient.quantity} onChange={(e) => setNewIngredient({ ...newIngredient, quantity: e.target.value })} className="w-20 text-sm p-2 border rounded" />
+                    <select value={newIngredient.unit} onChange={(e) => setNewIngredient({ ...newIngredient, unit: e.target.value })} className="text-sm p-2 border rounded bg-gray-50">
+                      <option value="kg">kg</option>
+                      <option value="g">g</option>
+                      <option value="L">L</option>
+                      <option value="ml">ml</option>
+                      <option value="und">und</option>
+                    </select>
+                  </div>
+                  
+                  {newIngredient.raw_material_id && (
+                    <div className="px-3 py-1 bg-gray-50 rounded border border-gray-100 text-right min-w-[100px]">
+                      <span className="block text-[10px] text-gray-400 font-bold uppercase leading-none">Subtotal</span>
+                      <span className="text-sm font-bold text-primary-600">
+                        {(() => {
+                          const baseCpu = newIngredient.purchase_price ? (newIngredient.purchase_price / (newIngredient.purchase_quantity || 1)) : 0;
+                          const factor = getConversionFactor(newIngredient.purchase_unit, newIngredient.unit);
+                          const cpu = baseCpu / factor;
+                          return fmt((parseFloat(newIngredient.quantity) || 0) * cpu);
+                        })()}
+                      </span>
+                    </div>
+                  )}
+
                   <button type="button" onClick={addIngredient} className="btn-primary p-2 whitespace-nowrap"><Plus size={16} className="inline mr-1"/> Añadir</button>
                 </div>
 
@@ -1196,7 +1241,9 @@ export default function Production() {
                   const totalCost = recipeForm.ingredients.reduce((acc, ing) => {
                     const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
                     const fallbackCpu = mat?.cost_per_unit || 0;
-                    const cpu = ing.purchase_price ? (ing.purchase_price / (ing.purchase_quantity || 1)) : fallbackCpu;
+                    const baseCpu = ing.purchase_price ? (ing.purchase_price / (ing.purchase_quantity || 1)) : fallbackCpu;
+                    const factor = getConversionFactor(ing.purchase_unit || mat?.unit, ing.unit);
+                    const cpu = baseCpu / factor;
                     return acc + (ing.quantity * cpu);
                   }, 0);
                   
