@@ -289,7 +289,8 @@ export default function Production() {
   const [searchRecipes, setSearchRecipes] = useState('');
   const [purchaseInvoices, setPurchaseInvoices] = useState([]);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
-  const [invoiceForm, setInvoiceForm] = useState({ raw_material_id: '', quantity: '', unit_price: '', supplier: '', invoice_number: '' });
+  const [invoiceForm, setInvoiceForm] = useState({ raw_material_id: '', quantity: '', unit_measure: 'kg', unit_price: '', supplier: '', invoice_number: '' });
+  const [showLowStockOnly, setShowLowStockOnly] = useState(false);
 
   const handleRecipeFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -496,7 +497,7 @@ export default function Production() {
       await api.post('purchase-invoices', payload);
       toast.success('Factura registrada y stock actualizado');
       setShowInvoiceForm(false);
-      setInvoiceForm({ raw_material_id: '', quantity: '', unit_price: '', supplier: '', invoice_number: '' });
+      setInvoiceForm({ raw_material_id: '', quantity: '', unit_measure: 'kg', unit_price: '', supplier: '', invoice_number: '' });
       loadData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Error al registrar factura');
@@ -528,7 +529,7 @@ export default function Production() {
   const stageIdx = (stage) => stages.indexOf(stage);
 
   const getRecipeForOrder = (order) => (recipes || []).find(r => r?.id === order?.recipe_id);
-  const fmt = (n) => `$${(n || 0).toLocaleString('es-CO')}`;
+  const fmt = (n) => `$${Math.round(n || 0).toLocaleString('es-CO')}`;
 
   // Calculate kit cost
   const calcKitCost = (recipe) => {
@@ -695,7 +696,7 @@ export default function Production() {
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
           <div className="card p-4"><div className="text-xs text-gray-500">Total Materias</div><div className="text-2xl font-bold">{rawMaterials.length}</div></div>
           <div className="card p-4"><div className="text-xs text-gray-500">Valor Inventario MP</div><div className="text-2xl font-bold">{fmt(rawMaterials.reduce((s, m) => s + (m.current_stock || 0) * (m.cost_per_unit || m.purchase_price || 0), 0))}</div></div>
-          <div className="card p-4"><div className="text-xs text-gray-500">Stock Bajo</div><div className="text-2xl font-bold text-red-500">{rawMaterials.filter(m => m.current_stock < m.min_stock).length}</div></div>
+          <div onClick={() => setShowLowStockOnly(!showLowStockOnly)} className={`card p-4 cursor-pointer transition-colors ${showLowStockOnly ? 'ring-2 ring-red-500 bg-red-50' : 'hover:bg-gray-50'}`}><div className="text-xs text-gray-500">Stock Bajo</div><div className="text-2xl font-bold text-red-500">{rawMaterials.filter(m => m.current_stock < m.min_stock).length}</div></div>
           <div className="card p-4"><div className="text-xs text-gray-500">Costo Promedio/Unidad</div><div className="text-2xl font-bold">{fmt(rawMaterials.length ? rawMaterials.reduce((s, m) => s + (m.cost_per_unit || 0), 0) / rawMaterials.length : 0)}</div></div>
         </div>
       )}
@@ -711,7 +712,7 @@ export default function Production() {
 
       {tab === 'materials' && (
         <div className="glass-card overflow-hidden">
-          {(rawMaterials || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas</p> : (rawMaterials || []).filter(m => { const q = searchMaterials.toLowerCase(); return !q || m.name?.toLowerCase().includes(q) || m.sku?.toLowerCase().includes(q) || m.supplier?.toLowerCase().includes(q); }).map((m) => (
+          {(rawMaterials || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas</p> : (rawMaterials || []).filter(m => { if (showLowStockOnly && m.current_stock >= m.min_stock) return false; const q = searchMaterials.toLowerCase(); return !q || m.name?.toLowerCase().includes(q) || m.sku?.toLowerCase().includes(q) || m.supplier?.toLowerCase().includes(q); }).map((m) => (
             m && (
               <div key={m.id} className="data-row gap-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                 <Boxes size={22} className="text-primary-400 flex-shrink-0" />
@@ -768,7 +769,7 @@ export default function Production() {
                     return (
                       <tr key={inv.id || i} className="border-t border-gray-100 hover:bg-gray-50">
                         <td className="px-4 py-3 font-medium">{mat?.name || inv.raw_material_id}</td>
-                        <td className="px-4 py-3">{inv.quantity}</td>
+                        <td className="px-4 py-3">{inv.quantity} {inv.unit_measure || ''}</td>
                         <td className="px-4 py-3">{fmt(inv.unit_price)}</td>
                         <td className="px-4 py-3 font-bold">{fmt((inv.quantity || 0) * (inv.unit_price || 0))}</td>
                         <td className="px-4 py-3">{inv.supplier || '—'}</td>
@@ -800,7 +801,16 @@ export default function Production() {
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Cantidad</label>
-                  <input type="number" className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.quantity} onChange={(e) => setInvoiceForm({ ...invoiceForm, quantity: e.target.value })} />
+                  <div className="flex gap-2">
+                    <input type="number" className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.quantity} onChange={(e) => setInvoiceForm({ ...invoiceForm, quantity: e.target.value })} />
+                    <select className="w-24 p-2 border border-gray-200 rounded-lg" value={invoiceForm.unit_measure} onChange={(e) => setInvoiceForm({ ...invoiceForm, unit_measure: e.target.value })}>
+                      <option value="kg">kg</option>
+                      <option value="g">g</option>
+                      <option value="L">L</option>
+                      <option value="ml">ml</option>
+                      <option value="und">und</option>
+                    </select>
+                  </div>
                 </div>
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>

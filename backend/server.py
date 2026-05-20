@@ -406,6 +406,7 @@ class PurchaseInvoice(BaseModel):
     raw_material_id: str
     raw_material_name: str = ""
     quantity: float
+    unit_measure: str = ""
     unit_price: float
     total: float = 0
     supplier: str = ""
@@ -416,6 +417,7 @@ class PurchaseInvoiceCreate(BaseModel):
     raw_material_id: str
     raw_material_name: str = ""
     quantity: float
+    unit_measure: str = ""
     unit_price: float
     supplier: str = ""
     invoice_number: str = ""
