@@ -309,7 +309,8 @@ input:focus, select:focus, textarea:focus {
   -webkit-backdrop-filter: blur(6px);
   z-index: 50;
   display: flex;
-  align-items: center;
+  align-items: flex-start;
+  padding-top: 3rem;
   justify-content: center;
   animation: fadeIn 0.2s ease-out;
 }

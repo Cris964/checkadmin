@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import api, { getAssetUrl } from '../lib/api';
 import { toast } from 'sonner';
-import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2, Trash2 } from 'lucide-react';
+import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2, Trash2, Search } from 'lucide-react';
 
 const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipes, rawMaterials, advanceOrder, expandedOrder, setExpandedOrder, warehouses, fmt }) => {
   const [localChecklist, setLocalChecklist] = useState([]);
@@ -285,6 +285,11 @@ export default function Production() {
   const [uploading, setUploading] = useState(false);
   const [selectedRecipeFile, setSelectedRecipeFile] = useState(null);
   const [selectedMaterialFile, setSelectedMaterialFile] = useState(null);
+  const [searchMaterials, setSearchMaterials] = useState('');
+  const [searchRecipes, setSearchRecipes] = useState('');
+  const [purchaseInvoices, setPurchaseInvoices] = useState([]);
+  const [showInvoiceForm, setShowInvoiceForm] = useState(false);
+  const [invoiceForm, setInvoiceForm] = useState({ raw_material_id: '', quantity: '', unit_price: '', supplier: '', invoice_number: '' });
 
   const handleRecipeFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
@@ -300,12 +305,13 @@ export default function Production() {
 
   const loadData = async () => {
     try {
-      const [o, r, m, p, w] = await Promise.all([
+      const [o, r, m, p, w, pi] = await Promise.all([
         api.get('production-orders').catch(() => ({ data: [] })), 
         api.get('recipes').catch(() => ({ data: [] })), 
         api.get('raw-materials').catch(() => ({ data: [] })), 
         api.get('products').catch(() => ({ data: [] })), 
-        api.get('warehouses').catch(() => ({ data: [] }))
+        api.get('warehouses').catch(() => ({ data: [] })),
+        api.get('purchase-invoices').catch(() => ({ data: [] }))
       ]);
       console.log('📦 Órdenes crudas desde BD:', o.data);
       setOrders(o.data || []); 
@@ -313,6 +319,7 @@ export default function Production() {
       setRawMaterials(m.data || []); 
       setProducts(p.data || []); 
       setWarehouses(w.data || []);
+      setPurchaseInvoices(pi.data || []);
     } catch (error) {
       console.error("Error loading production data:", error);
       toast.error("Error al cargar datos de producción. Verifique la conexión.");
@@ -417,6 +424,17 @@ export default function Production() {
     setShowRecipeForm(true);
   };
 
+  const deleteRecipe = async (id) => {
+    if (!window.confirm('¿Eliminar esta receta permanentemente?')) return;
+    try {
+      await api.delete(`recipes/${id}`);
+      toast.success('Receta eliminada');
+      loadData();
+    } catch (e) {
+      toast.error('Error al eliminar receta');
+    }
+  };
+
   const addIngredient = () => {
     if (!newIngredient.raw_material_id || !newIngredient.quantity) return;
     setRecipeForm({ ...recipeForm, ingredients: [...recipeForm.ingredients, { ...newIngredient, quantity: parseFloat(newIngredient.quantity) || 0 }] });
@@ -465,6 +483,18 @@ export default function Production() {
       toast.error(err.response?.data?.detail || 'Error al guardar materia prima');
     } finally {
       setUploading(false);
+    }
+  };
+
+  const createPurchaseInvoice = async () => {
+    try {
+      await api.post('purchase-invoices', invoiceForm);
+      toast.success('Factura registrada y stock actualizado');
+      setShowInvoiceForm(false);
+      setInvoiceForm({ raw_material_id: '', quantity: '', unit_price: '', supplier: '', invoice_number: '' });
+      loadData();
+    } catch (e) {
+      toast.error('Error al registrar factura');
     }
   };
 
@@ -590,8 +620,15 @@ export default function Production() {
       )}
 
       {tab === 'recipes' && (
+        <div>
+        <div className="mb-4">
+          <div className="relative">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+            <input type="text" placeholder="Buscar receta..." value={searchRecipes} onChange={e => setSearchRecipes(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-300" />
+          </div>
+        </div>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {(recipes || []).length === 0 ? <p className="text-gray-400 col-span-full text-center py-8 glass-card">No hay recetas</p> : (recipes || []).map((r) => {
+          {(recipes || []).length === 0 ? <p className="text-gray-400 col-span-full text-center py-8 glass-card">No hay recetas</p> : (recipes || []).filter(r => { const q = searchRecipes.toLowerCase(); return !q || r.output_product_name?.toLowerCase().includes(q) || r.cliente?.toLowerCase().includes(q) || r.description?.toLowerCase().includes(q); }).map((r) => {
             if (!r) return null;
             const kitCost = calcKitCost(r);
             return (
@@ -634,17 +671,37 @@ export default function Production() {
                   <div className="flex gap-2 border-t border-gray-100 pt-4">
                     <button className="flex-1 btn-secondary py-2 text-xs">Detalles</button>
                     <button onClick={() => handleEditRecipe(r)} className="btn-secondary py-2 px-4 text-xs">Editar</button>
+                    <button onClick={() => deleteRecipe(r.id)} className="btn-secondary py-2 px-4 text-xs text-red-500 hover:bg-red-50"><Trash2 size={14}/></button>
                   </div>
                 </div>
               </div>
             );
           })}
         </div>
+        </div>
+      )}
+
+      {tab === 'materials' && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+          <div className="card p-4"><div className="text-xs text-gray-500">Total Materias</div><div className="text-2xl font-bold">{rawMaterials.length}</div></div>
+          <div className="card p-4"><div className="text-xs text-gray-500">Valor Inventario MP</div><div className="text-2xl font-bold">{fmt(rawMaterials.reduce((s, m) => s + (m.current_stock || 0) * (m.cost_per_unit || m.purchase_price || 0), 0))}</div></div>
+          <div className="card p-4"><div className="text-xs text-gray-500">Stock Bajo</div><div className="text-2xl font-bold text-red-500">{rawMaterials.filter(m => m.current_stock < m.min_stock).length}</div></div>
+          <div className="card p-4"><div className="text-xs text-gray-500">Costo Promedio/Unidad</div><div className="text-2xl font-bold">{fmt(rawMaterials.length ? rawMaterials.reduce((s, m) => s + (m.cost_per_unit || 0), 0) / rawMaterials.length : 0)}</div></div>
+        </div>
+      )}
+
+      {tab === 'materials' && (
+        <div className="mb-4">
+          <div className="relative">
+            <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
+            <input type="text" placeholder="Buscar materia prima..." value={searchMaterials} onChange={e => setSearchMaterials(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-300" />
+          </div>
+        </div>
       )}
 
       {tab === 'materials' && (
         <div className="glass-card overflow-hidden">
-          {(rawMaterials || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas</p> : (rawMaterials || []).map((m) => (
+          {(rawMaterials || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas</p> : (rawMaterials || []).filter(m => { const q = searchMaterials.toLowerCase(); return !q || m.name?.toLowerCase().includes(q) || m.sku?.toLowerCase().includes(q) || m.supplier?.toLowerCase().includes(q); }).map((m) => (
             m && (
               <div key={m.id} className="data-row gap-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                 <Boxes size={22} className="text-primary-400 flex-shrink-0" />
@@ -673,6 +730,90 @@ export default function Production() {
               </div>
             )
           ))}
+        </div>
+      )}
+
+      {tab === 'materials' && (
+        <div className="mt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-800">Facturas de Compra</h3>
+            <button onClick={() => setShowInvoiceForm(true)} className="btn-primary text-xs"><Plus size={14} className="inline mr-1"/>Nueva Factura</button>
+          </div>
+          <div className="glass-card overflow-hidden">
+            {(purchaseInvoices || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay facturas de compra</p> : (
+              <table className="w-full text-sm">
+                <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
+                  <tr>
+                    <th className="px-4 py-3 text-left">Materia Prima</th>
+                    <th className="px-4 py-3 text-left">Cantidad</th>
+                    <th className="px-4 py-3 text-left">Valor Unit.</th>
+                    <th className="px-4 py-3 text-left">Total</th>
+                    <th className="px-4 py-3 text-left">Proveedor</th>
+                    <th className="px-4 py-3 text-left"># Factura</th>
+                    <th className="px-4 py-3 text-left">Fecha</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(purchaseInvoices || []).map((inv, i) => {
+                    const mat = (rawMaterials || []).find(m => m.id === inv.raw_material_id);
+                    return (
+                      <tr key={inv.id || i} className="border-t border-gray-100 hover:bg-gray-50">
+                        <td className="px-4 py-3 font-medium">{mat?.name || inv.raw_material_id}</td>
+                        <td className="px-4 py-3">{inv.quantity}</td>
+                        <td className="px-4 py-3">{fmt(inv.unit_price)}</td>
+                        <td className="px-4 py-3 font-bold">{fmt((inv.quantity || 0) * (inv.unit_price || 0))}</td>
+                        <td className="px-4 py-3">{inv.supplier || '—'}</td>
+                        <td className="px-4 py-3">{inv.invoice_number || '—'}</td>
+                        <td className="px-4 py-3 text-xs text-gray-500">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('es-CO') : '—'}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            )}
+          </div>
+        </div>
+      )}
+
+      {/* Purchase Invoice Modal */}
+      {showInvoiceForm && (
+        <div className="modal-overlay" onClick={() => setShowInvoiceForm(false)}>
+          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">Nueva Factura de Compra</h3><button onClick={() => setShowInvoiceForm(false)}><X size={20} /></button></div>
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Materia Prima</label>
+                <select className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.raw_material_id} onChange={(e) => setInvoiceForm({ ...invoiceForm, raw_material_id: e.target.value })}>
+                  <option value="">Seleccionar...</option>
+                  {(rawMaterials || []).map(m => <option key={m?.id} value={m?.id}>{m?.name}</option>)}
+                </select>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Cantidad</label>
+                  <input type="number" className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.quantity} onChange={(e) => setInvoiceForm({ ...invoiceForm, quantity: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>
+                  <input type="number" step="0.01" className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.unit_price} onChange={(e) => setInvoiceForm({ ...invoiceForm, unit_price: e.target.value })} />
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1">Proveedor</label>
+                  <input type="text" className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.supplier} onChange={(e) => setInvoiceForm({ ...invoiceForm, supplier: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-semibold text-gray-700 mb-1"># Factura</label>
+                  <input type="text" className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.invoice_number} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_number: e.target.value })} />
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-2 mt-6">
+              <button onClick={() => setShowInvoiceForm(false)} className="flex-1 py-2.5 border border-gray-200 rounded-lg font-medium hover:bg-gray-50 transition-colors">Cancelar</button>
+              <button onClick={createPurchaseInvoice} className="flex-1 btn-primary justify-center py-2.5 font-bold uppercase tracking-wider" disabled={!invoiceForm.raw_material_id || !invoiceForm.quantity}>Registrar Factura</button>
+            </div>
+          </div>
         </div>
       )}
 

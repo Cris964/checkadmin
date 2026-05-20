@@ -86,6 +86,7 @@ class MockDB:
         self.sale_items = MockCollection()
         self.warehouses = MockCollection()
         self.raw_materials = MockCollection()
+        self.purchase_invoices = MockCollection()
         self.recipes = MockCollection()
         self.customers = MockCollection()
         self.transactions = MockCollection()
@@ -397,6 +398,27 @@ class RawMaterialUpdate(BaseModel):
     lote: Optional[str] = None
     vencimiento: Optional[str] = None
     warehouse_id: Optional[str] = None
+
+# --- Purchase Invoices ---
+class PurchaseInvoice(BaseModel):
+    id: str = ""
+    company_id: str = ""
+    raw_material_id: str
+    raw_material_name: str = ""
+    quantity: float
+    unit_price: float
+    total: float = 0
+    supplier: str = ""
+    invoice_number: str = ""
+    created_at: str = ""
+
+class PurchaseInvoiceCreate(BaseModel):
+    raw_material_id: str
+    raw_material_name: str = ""
+    quantity: float
+    unit_price: float
+    supplier: str = ""
+    invoice_number: str = ""
 
 class ProductionOrder(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1207,6 +1229,50 @@ async def delete_raw_material(material_id: str, current_user: dict = Depends(get
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Raw material not found")
     return {"message": "Raw material deleted"}
+
+# --- Purchase Invoices ---
+@api_router.get("/purchase-invoices")
+async def get_purchase_invoices(current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    invoices = await database.purchase_invoices.find({"company_id": current_user["company_id"]}).sort("created_at", -1).to_list(500)
+    return invoices
+
+@api_router.post("/purchase-invoices")
+async def create_purchase_invoice(invoice: PurchaseInvoiceCreate, current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    # Verify the raw material exists
+    material = await database.raw_materials.find_one({"id": invoice.raw_material_id, "company_id": current_user["company_id"]})
+    if not material:
+        raise HTTPException(status_code=404, detail="Raw material not found")
+    
+    doc = invoice.dict()
+    doc["id"] = str(uuid.uuid4())
+    doc["company_id"] = current_user["company_id"]
+    doc["raw_material_name"] = material.get("name", "")
+    doc["total"] = invoice.quantity * invoice.unit_price
+    doc["created_at"] = datetime.utcnow().isoformat()
+    await database.purchase_invoices.insert_one(doc)
+    
+    # Update raw material stock
+    await database.raw_materials.update_one(
+        {"id": invoice.raw_material_id, "company_id": current_user["company_id"]},
+        {
+            "$inc": {"current_stock": invoice.quantity},
+            "$set": {"purchase_price": invoice.unit_price}
+        }
+    )
+    
+    doc.pop("_id", None)
+    return doc
+
+@api_router.delete("/purchase-invoices/{invoice_id}")
+async def delete_purchase_invoice(invoice_id: str, current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    invoice = await database.purchase_invoices.find_one({"id": invoice_id, "company_id": current_user["company_id"]})
+    if not invoice:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    await database.purchase_invoices.delete_one({"id": invoice_id, "company_id": current_user["company_id"]})
+    return {"message": "Invoice deleted"}
 
 # ==================== RECIPES ====================
 
