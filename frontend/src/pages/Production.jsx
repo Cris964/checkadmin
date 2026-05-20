@@ -553,7 +553,12 @@ export default function Production() {
         </div>
         {tab === 'orders' && <button onClick={() => setShowOrderForm(true)} className="btn-primary"><Plus size={16} /> Nueva Orden</button>}
         {tab === 'recipes' && <button onClick={() => setShowRecipeForm(true)} className="btn-primary"><Plus size={16} /> Nueva Receta</button>}
-        {tab === 'materials' && <button onClick={() => setShowMaterialForm(true)} className="btn-primary"><Plus size={16} /> Nueva Materia Prima</button>}
+        {tab === 'materials' && (
+          <div className="flex gap-2">
+            <button onClick={() => setShowInvoiceForm(true)} className="btn-secondary text-sm px-3"><Plus size={16} /> Nueva Factura</button>
+            <button onClick={() => setShowMaterialForm(true)} className="btn-primary text-sm px-3"><Plus size={16} /> Nueva Materia Prima</button>
+          </div>
+        )}
       </div>
 
       {/* Stats */}
@@ -737,7 +742,6 @@ export default function Production() {
         <div className="mt-6">
           <div className="flex items-center justify-between mb-4">
             <h3 className="text-lg font-bold text-gray-800">Facturas de Compra</h3>
-            <button onClick={() => setShowInvoiceForm(true)} className="btn-primary text-xs"><Plus size={14} className="inline mr-1"/>Nueva Factura</button>
           </div>
           <div className="glass-card overflow-hidden">
             {(purchaseInvoices || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay facturas de compra</p> : (
