@@ -289,7 +289,8 @@ export default function Production() {
   const [searchRecipes, setSearchRecipes] = useState('');
   const [purchaseInvoices, setPurchaseInvoices] = useState([]);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
-  const [invoiceForm, setInvoiceForm] = useState({ raw_material_id: '', quantity: '', unit_measure: 'kg', unit_price: '', supplier: '', invoice_number: '' });
+  const [invoiceForm, setInvoiceForm] = useState({ supplier: '', invoice_number: '', items: [] });
+  const [currentInvoiceItem, setCurrentInvoiceItem] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit_measure: 'kg', unit_price: '' });
   const [showLowStockOnly, setShowLowStockOnly] = useState(false);
 
   const handleRecipeFileChange = (e) => {
@@ -487,17 +488,40 @@ export default function Production() {
     }
   };
 
+  const addInvoiceItem = () => {
+    if (!currentInvoiceItem.raw_material_name && !currentInvoiceItem.raw_material_id) return toast.error('Debe seleccionar o escribir un producto');
+    if (!currentInvoiceItem.quantity || !currentInvoiceItem.unit_price) return toast.error('Debe ingresar cantidad y precio');
+    
+    const matName = currentInvoiceItem.raw_material_id && !currentInvoiceItem.raw_material_name 
+      ? (rawMaterials.find(m => m.id === currentInvoiceItem.raw_material_id)?.name || '') 
+      : currentInvoiceItem.raw_material_name;
+
+    setInvoiceForm({
+      ...invoiceForm,
+      items: [...invoiceForm.items, {
+        raw_material_id: currentInvoiceItem.raw_material_id || null,
+        raw_material_name: matName,
+        quantity: parseFloat(currentInvoiceItem.quantity) || 0,
+        unit_measure: currentInvoiceItem.unit_measure,
+        unit_price: parseFloat(currentInvoiceItem.unit_price) || 0
+      }]
+    });
+    setCurrentInvoiceItem({ raw_material_id: '', raw_material_name: '', quantity: '', unit_measure: 'kg', unit_price: '' });
+  };
+
+  const removeInvoiceItem = (index) => {
+    const newItems = [...invoiceForm.items];
+    newItems.splice(index, 1);
+    setInvoiceForm({ ...invoiceForm, items: newItems });
+  };
+
   const createPurchaseInvoice = async () => {
+    if (invoiceForm.items.length === 0) return toast.error('La factura debe tener al menos un ítem');
     try {
-      const payload = {
-        ...invoiceForm,
-        quantity: parseFloat(invoiceForm.quantity) || 0,
-        unit_price: parseFloat(invoiceForm.unit_price) || 0
-      };
-      await api.post('purchase-invoices', payload);
+      await api.post('purchase-invoices', invoiceForm);
       toast.success('Factura registrada y stock actualizado');
       setShowInvoiceForm(false);
-      setInvoiceForm({ raw_material_id: '', quantity: '', unit_measure: 'kg', unit_price: '', supplier: '', invoice_number: '' });
+      setInvoiceForm({ supplier: '', invoice_number: '', items: [] });
       loadData();
     } catch (e) {
       toast.error(e.response?.data?.detail || 'Error al registrar factura');
@@ -561,7 +585,7 @@ export default function Production() {
         {tab === 'recipes' && <button onClick={() => setShowRecipeForm(true)} className="btn-primary"><Plus size={16} /> Nueva Receta</button>}
         {tab === 'materials' && (
           <div className="flex gap-2">
-            <button onClick={() => setShowInvoiceForm(true)} className="btn-secondary text-sm px-3"><Plus size={16} /> Nueva Factura</button>
+            <button onClick={() => setShowInvoiceForm(true)} className="btn-primary text-sm px-3"><Plus size={16} /> Nueva Factura</button>
             <button onClick={() => setShowMaterialForm(true)} className="btn-primary text-sm px-3"><Plus size={16} /> Nueva Materia Prima</button>
           </div>
         )}
@@ -730,8 +754,9 @@ export default function Production() {
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Lote</p><p className="font-medium text-xs text-gray-700">{m.lote || '—'}</p></div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Vence</p><p className="font-medium text-xs text-gray-700">{m.vencimiento || '—'}</p></div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo/U</p><p className="font-bold text-sm text-primary-600">{fmt(m.cost_per_unit)}</p></div>
+                  <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo Total</p><p className="font-bold text-sm text-gray-800">{fmt((m.cost_per_unit || m.purchase_price || 0) * (m.current_stock || 0))}</p></div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Proveedor</p><p className="font-medium text-xs text-gray-600 truncate">{m.supplier || '—'}</p></div>
-                  <div className="flex items-center justify-end gap-2">
+                  <div className="flex items-center justify-end gap-2 col-span-2 sm:col-span-1 md:col-span-1">
                     {m.image_url && <img src={m.image_url.startsWith('http') ? m.image_url : `https://checkadmin-api.onrender.com${m.image_url}`} alt={m.name} className="w-8 h-8 rounded object-cover border border-gray-200" />}
                     <button onClick={() => handleEditMaterial(m)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-primary-600 transition-colors">
                       <Edit2 size={16} />
@@ -754,28 +779,47 @@ export default function Production() {
               <table className="w-full text-sm">
                 <thead className="bg-gray-50 text-xs text-gray-500 uppercase">
                   <tr>
-                    <th className="px-4 py-3 text-left">Materia Prima</th>
-                    <th className="px-4 py-3 text-left">Cantidad</th>
-                    <th className="px-4 py-3 text-left">Valor Unit.</th>
-                    <th className="px-4 py-3 text-left">Total</th>
+                    <th className="px-4 py-3 text-left">Ítems</th>
                     <th className="px-4 py-3 text-left">Proveedor</th>
                     <th className="px-4 py-3 text-left"># Factura</th>
+                    <th className="px-4 py-3 text-left">Total Factura</th>
                     <th className="px-4 py-3 text-left">Fecha</th>
+                    <th className="px-4 py-3 text-right"></th>
                   </tr>
                 </thead>
                 <tbody>
-                  {(purchaseInvoices || []).map((inv, i) => {
-                    const mat = (rawMaterials || []).find(m => m.id === inv.raw_material_id);
-                    return (
-                      <tr key={inv.id || i} className="border-t border-gray-100 hover:bg-gray-50">
-                        <td className="px-4 py-3 font-medium">{mat?.name || inv.raw_material_id}</td>
-                        <td className="px-4 py-3">{inv.quantity} {inv.unit_measure || ''}</td>
-                        <td className="px-4 py-3">{fmt(inv.unit_price)}</td>
-                        <td className="px-4 py-3 font-bold">{fmt((inv.quantity || 0) * (inv.unit_price || 0))}</td>
+                  {(purchaseInvoices || []).map((inv, i) => (
+                      <tr key={inv.id || i} className="border-t border-gray-100 hover:bg-gray-50 group cursor-pointer" onClick={() => setExpandedOrder(expandedOrder === inv.id ? null : inv.id)}>
+                        <td className="px-4 py-3 font-medium">{inv.items?.length || 1} ítems</td>
                         <td className="px-4 py-3">{inv.supplier || '—'}</td>
-                        <td className="px-4 py-3">{inv.invoice_number || '—'}</td>
+                        <td className="px-4 py-3 font-medium">{inv.invoice_number || '—'}</td>
+                        <td className="px-4 py-3 font-bold text-primary-600">{fmt(inv.total_amount || inv.total || 0)}</td>
                         <td className="px-4 py-3 text-xs text-gray-500">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('es-CO') : '—'}</td>
+                        <td className="px-4 py-3 text-right"><ChevronRight size={16} className={`inline transition-transform ${expandedOrder === inv.id ? 'rotate-90' : ''}`} /></td>
                       </tr>
+                      {expandedOrder === inv.id && (
+                        <tr>
+                          <td colSpan="6" className="p-0 border-b border-gray-100">
+                            <div className="bg-gray-50 p-4 shadow-inner">
+                              <table className="w-full text-xs">
+                                <thead className="text-gray-500 uppercase">
+                                  <tr><th className="text-left py-2">Producto</th><th className="text-left py-2">Cantidad</th><th className="text-left py-2">V. Unitario</th><th className="text-left py-2">Subtotal</th></tr>
+                                </thead>
+                                <tbody>
+                                  {(inv.items || (inv.raw_material_id ? [{ raw_material_name: inv.raw_material_name || inv.raw_material_id, quantity: inv.quantity, unit_measure: inv.unit_measure, unit_price: inv.unit_price, total: inv.total }] : [])).map((item, j) => (
+                                    <tr key={j} className="border-t border-gray-200">
+                                      <td className="py-2 font-medium">{item.raw_material_name}</td>
+                                      <td className="py-2">{item.quantity} {item.unit_measure || ''}</td>
+                                      <td className="py-2">{fmt(item.unit_price)}</td>
+                                      <td className="py-2 font-bold">{fmt(item.total)}</td>
+                                    </tr>
+                                  ))}
+                                </tbody>
+                              </table>
+                            </div>
+                          </td>
+                        </tr>
+                      )}
                     );
                   })}
                 </tbody>
@@ -785,38 +829,12 @@ export default function Production() {
         </div>
       )}
 
-      {/* Purchase Invoice Modal */}
       {showInvoiceForm && (
         <div className="modal-overlay" onClick={() => setShowInvoiceForm(false)}>
-          <div className="modal-content" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content max-w-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">Nueva Factura de Compra</h3><button onClick={() => setShowInvoiceForm(false)}><X size={20} /></button></div>
+            
             <div className="space-y-4">
-              <div>
-                <label className="block text-sm font-semibold text-gray-700 mb-1">Materia Prima</label>
-                <select className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.raw_material_id} onChange={(e) => setInvoiceForm({ ...invoiceForm, raw_material_id: e.target.value })}>
-                  <option value="">Seleccionar...</option>
-                  {(rawMaterials || []).map(m => <option key={m?.id} value={m?.id}>{m?.name}</option>)}
-                </select>
-              </div>
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Cantidad</label>
-                  <div className="flex gap-2">
-                    <input type="number" className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.quantity} onChange={(e) => setInvoiceForm({ ...invoiceForm, quantity: e.target.value })} />
-                    <select className="w-24 p-2 border border-gray-200 rounded-lg" value={invoiceForm.unit_measure} onChange={(e) => setInvoiceForm({ ...invoiceForm, unit_measure: e.target.value })}>
-                      <option value="kg">kg</option>
-                      <option value="g">g</option>
-                      <option value="L">L</option>
-                      <option value="ml">ml</option>
-                      <option value="und">und</option>
-                    </select>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-semibold text-gray-700 mb-1">Precio Unitario</label>
-                  <input type="number" step="0.01" className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.unit_price} onChange={(e) => setInvoiceForm({ ...invoiceForm, unit_price: e.target.value })} />
-                </div>
-              </div>
               <div className="grid grid-cols-2 gap-4">
                 <div>
                   <label className="block text-sm font-semibold text-gray-700 mb-1">Proveedor</label>
@@ -827,10 +845,86 @@ export default function Production() {
                   <input type="text" className="w-full p-2 border border-gray-200 rounded-lg" value={invoiceForm.invoice_number} onChange={(e) => setInvoiceForm({ ...invoiceForm, invoice_number: e.target.value })} />
                 </div>
               </div>
+
+              <div className="bg-gray-50 p-4 rounded-xl border border-gray-200 space-y-4">
+                <h4 className="font-bold text-sm text-gray-700">Agregar Producto</h4>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Buscar o Seleccionar</label>
+                    <select className="w-full p-2 text-sm border border-gray-200 rounded-lg" value={currentInvoiceItem.raw_material_id || (currentInvoiceItem.raw_material_name ? 'NEW' : '')} onChange={(e) => {
+                      if (e.target.value === 'NEW') {
+                        setCurrentInvoiceItem({ ...currentInvoiceItem, raw_material_id: '', raw_material_name: '' });
+                      } else if (e.target.value === '') {
+                        setCurrentInvoiceItem({ ...currentInvoiceItem, raw_material_id: '', raw_material_name: '' });
+                      } else {
+                        const mat = rawMaterials.find(m => m.id === e.target.value);
+                        setCurrentInvoiceItem({ ...currentInvoiceItem, raw_material_id: mat.id, raw_material_name: mat.name, unit_measure: mat.unit || 'kg' });
+                      }
+                    }}>
+                      <option value="">Seleccionar del inventario...</option>
+                      {(rawMaterials || []).map(m => <option key={m.id} value={m.id}>{m.name}</option>)}
+                      <option value="NEW">+ Agregar producto nuevo no registrado</option>
+                    </select>
+                  </div>
+                  {(!currentInvoiceItem.raw_material_id && currentInvoiceItem.raw_material_name !== undefined) && (
+                    <div>
+                      <label className="block text-xs font-semibold text-gray-500 mb-1">Nombre del Nuevo Producto</label>
+                      <input type="text" className="w-full p-2 text-sm border border-gray-200 rounded-lg" placeholder="Ej: Pintura Azul..." value={currentInvoiceItem.raw_material_name} onChange={(e) => setCurrentInvoiceItem({ ...currentInvoiceItem, raw_material_name: e.target.value })} />
+                    </div>
+                  )}
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
+                  <div className="col-span-1 sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Cantidad</label>
+                    <div className="flex gap-2">
+                      <input type="number" className="w-full p-2 text-sm border border-gray-200 rounded-lg" value={currentInvoiceItem.quantity} onChange={(e) => setCurrentInvoiceItem({ ...currentInvoiceItem, quantity: e.target.value })} />
+                      <select className="w-20 p-2 text-sm border border-gray-200 rounded-lg" value={currentInvoiceItem.unit_measure} onChange={(e) => setCurrentInvoiceItem({ ...currentInvoiceItem, unit_measure: e.target.value })}>
+                        <option value="kg">kg</option><option value="g">g</option><option value="L">L</option><option value="ml">ml</option><option value="und">und</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="col-span-1 sm:col-span-2">
+                    <label className="block text-xs font-semibold text-gray-500 mb-1">Precio Unitario</label>
+                    <input type="number" step="0.01" className="w-full p-2 text-sm border border-gray-200 rounded-lg" value={currentInvoiceItem.unit_price} onChange={(e) => setCurrentInvoiceItem({ ...currentInvoiceItem, unit_price: e.target.value })} />
+                  </div>
+                </div>
+                <button onClick={addInvoiceItem} className="w-full btn-secondary text-sm py-2"><Plus size={16} className="inline mr-1"/> Agregar a Factura</button>
+              </div>
+
+              {invoiceForm.items.length > 0 && (
+                <div className="border border-gray-200 rounded-xl overflow-hidden">
+                  <table className="w-full text-sm">
+                    <thead className="bg-gray-100 text-gray-600 text-xs uppercase">
+                      <tr><th className="px-3 py-2 text-left">Producto</th><th className="px-3 py-2 text-left">Cant.</th><th className="px-3 py-2 text-left">V. Unit</th><th className="px-3 py-2 text-left">Subtotal</th><th></th></tr>
+                    </thead>
+                    <tbody>
+                      {invoiceForm.items.map((item, idx) => (
+                        <tr key={idx} className="border-t border-gray-100">
+                          <td className="px-3 py-2 font-medium">
+                            {item.raw_material_name}
+                            {!item.raw_material_id && <span className="ml-2 text-[10px] bg-blue-100 text-blue-700 px-1 py-0.5 rounded">NUEVO</span>}
+                          </td>
+                          <td className="px-3 py-2">{item.quantity} {item.unit_measure}</td>
+                          <td className="px-3 py-2">{fmt(item.unit_price)}</td>
+                          <td className="px-3 py-2 font-bold">{fmt(item.quantity * item.unit_price)}</td>
+                          <td className="px-3 py-2 text-right"><button onClick={() => removeInvoiceItem(idx)} className="text-red-500 hover:bg-red-50 p-1 rounded"><Trash2 size={14}/></button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                    <tfoot className="bg-gray-50 font-bold border-t border-gray-200">
+                      <tr>
+                        <td colSpan="3" className="px-3 py-3 text-right">TOTAL FACTURA:</td>
+                        <td colSpan="2" className="px-3 py-3 text-primary-600 text-lg">{fmt(invoiceForm.items.reduce((s, i) => s + (i.quantity * i.unit_price), 0))}</td>
+                      </tr>
+                    </tfoot>
+                  </table>
+                </div>
+              )}
             </div>
+
             <div className="flex gap-2 mt-6">
               <button onClick={() => setShowInvoiceForm(false)} className="flex-1 py-2.5 border border-gray-200 rounded-lg font-medium hover:bg-gray-50 transition-colors">Cancelar</button>
-              <button onClick={createPurchaseInvoice} className="flex-1 btn-primary justify-center py-2.5 font-bold uppercase tracking-wider" disabled={!invoiceForm.raw_material_id || !invoiceForm.quantity}>Registrar Factura</button>
+              <button onClick={createPurchaseInvoice} className="flex-1 btn-primary justify-center py-2.5 font-bold uppercase tracking-wider" disabled={invoiceForm.items.length === 0}>Guardar Factura</button>
             </div>
           </div>
         </div>

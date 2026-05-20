@@ -17,6 +17,7 @@ from datetime import datetime, timezone, timedelta
 from jose import JWTError, jwt
 from passlib.context import CryptContext
 import uuid
+import random
 import mercadopago
 from utils import generate_invoice_html, generate_payroll_html, send_email_async
 
@@ -400,27 +401,27 @@ class RawMaterialUpdate(BaseModel):
     warehouse_id: Optional[str] = None
 
 # --- Purchase Invoices ---
+class PurchaseInvoiceItem(BaseModel):
+    raw_material_id: Optional[str] = None
+    raw_material_name: str
+    quantity: float
+    unit_measure: str = "kg"
+    unit_price: float
+    total: float = 0
+
 class PurchaseInvoice(BaseModel):
     id: str = ""
     company_id: str = ""
-    raw_material_id: str
-    raw_material_name: str = ""
-    quantity: float
-    unit_measure: str = ""
-    unit_price: float
-    total: float = 0
     supplier: str = ""
     invoice_number: str = ""
+    total_amount: float = 0
+    items: List[PurchaseInvoiceItem] = Field(default_factory=list)
     created_at: str = ""
 
 class PurchaseInvoiceCreate(BaseModel):
-    raw_material_id: str
-    raw_material_name: str = ""
-    quantity: float
-    unit_measure: str = ""
-    unit_price: float
     supplier: str = ""
     invoice_number: str = ""
+    items: List[PurchaseInvoiceItem] = Field(default_factory=list)
 
 class ProductionOrder(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1242,27 +1243,51 @@ async def get_purchase_invoices(current_user: dict = Depends(get_current_user)):
 @api_router.post("/purchase-invoices")
 async def create_purchase_invoice(invoice: PurchaseInvoiceCreate, current_user: dict = Depends(get_current_user)):
     database = get_db()
-    # Verify the raw material exists
-    material = await database.raw_materials.find_one({"id": invoice.raw_material_id, "company_id": current_user["company_id"]})
-    if not material:
-        raise HTTPException(status_code=404, detail="Raw material not found")
     
-    doc = invoice.dict()
+    doc = invoice.model_dump()
     doc["id"] = str(uuid.uuid4())
     doc["company_id"] = current_user["company_id"]
-    doc["raw_material_name"] = material.get("name", "")
-    doc["total"] = invoice.quantity * invoice.unit_price
-    doc["created_at"] = datetime.utcnow().isoformat()
-    await database.purchase_invoices.insert_one(doc)
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    doc["total_amount"] = 0
     
-    # Update raw material stock
-    await database.raw_materials.update_one(
-        {"id": invoice.raw_material_id, "company_id": current_user["company_id"]},
-        {
-            "$inc": {"current_stock": invoice.quantity},
-            "$set": {"purchase_price": invoice.unit_price}
-        }
-    )
+    # Process items
+    for item in doc.get("items", []):
+        qty = item.get("quantity", 0)
+        price = item.get("unit_price", 0)
+        item["total"] = qty * price
+        doc["total_amount"] += item["total"]
+        
+        mat_id = item.get("raw_material_id")
+        if mat_id:
+            # Update existing material
+            await database.raw_materials.update_one(
+                {"id": mat_id, "company_id": current_user["company_id"]},
+                {
+                    "$inc": {"current_stock": qty},
+                    "$set": {"purchase_price": price}
+                }
+            )
+        else:
+            # Create new material automatically
+            new_mat_id = str(uuid.uuid4())
+            item["raw_material_id"] = new_mat_id
+            new_mat = {
+                "id": new_mat_id,
+                "company_id": current_user["company_id"],
+                "name": item.get("raw_material_name", "Sin nombre"),
+                "sku": f"MAT-{int(datetime.now(timezone.utc).timestamp())}-{random.randint(100,999)}",
+                "current_stock": qty,
+                "min_stock": 0,
+                "unit": item.get("unit_measure", "kg"),
+                "purchase_price": price,
+                "purchase_quantity": 1,
+                "purchase_unit_measure": item.get("unit_measure", "kg"),
+                "cost_per_unit": price,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await database.raw_materials.insert_one(new_mat)
+
+    await database.purchase_invoices.insert_one(doc)
     
     doc.pop("_id", None)
     return doc
