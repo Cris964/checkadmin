@@ -277,6 +277,8 @@ class Product(BaseModel):
     profit_percentage: float = 0.0
     image_url: Optional[str] = None
     warehouse_id: Optional[str] = None
+    category: Optional[str] = None
+    has_iva: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class ProductCreate(BaseModel):
@@ -289,6 +291,8 @@ class ProductCreate(BaseModel):
     stock_current: int
     image_url: Optional[str] = None
     warehouse_id: Optional[str] = None
+    category: Optional[str] = None
+    has_iva: bool = False
 
 class ProductUpdate(BaseModel):
     sku: Optional[str] = None
@@ -300,6 +304,30 @@ class ProductUpdate(BaseModel):
     stock_current: Optional[int] = None
     image_url: Optional[str] = None
     warehouse_id: Optional[str] = None
+    category: Optional[str] = None
+    has_iva: Optional[bool] = None
+
+class ProductSupplier(BaseModel):
+    model_config = ConfigDict(extra="ignore")
+    id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    company_id: str
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+    created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class ProductSupplierCreate(BaseModel):
+    name: str
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
+
+class ProductSupplierUpdate(BaseModel):
+    name: Optional[str] = None
+    phone: Optional[str] = None
+    email: Optional[str] = None
+    address: Optional[str] = None
 
 class Warehouse(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -426,6 +454,7 @@ class PurchaseInvoiceCreate(BaseModel):
 class ProductionOrder(BaseModel):
     model_config = ConfigDict(extra="ignore")
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
+    order_number: Optional[str] = None
     company_id: str
     recipe_id: str
     recipe_name: str
@@ -500,7 +529,15 @@ class Sale(BaseModel):
     customer_email: Optional[str] = None
     payment_details: Optional[dict] = None # {type: "debito/credito", franchise: "visa...", bank: "...", voucher_number: "..."}
     voucher_history: List[dict] = Field(default_factory=list) # Audit logs for voucher edits
+    status: str = "completed"
+    refund_reason: Optional[str] = None
+    refund_by: Optional[str] = None
+    refunded_at: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
+
+class SaleRefund(BaseModel):
+    user_name: str
+    reason: str
 
 class SaleItem(BaseModel):
     product_id: str
@@ -1301,6 +1338,74 @@ async def delete_purchase_invoice(invoice_id: str, current_user: dict = Depends(
     await database.purchase_invoices.delete_one({"id": invoice_id, "company_id": current_user["company_id"]})
     return {"message": "Invoice deleted"}
 
+# --- Product Suppliers ---
+@api_router.get("/product-suppliers")
+async def get_product_suppliers(current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    suppliers = await database.product_suppliers.find({"company_id": current_user["company_id"]}, {"_id": 0}).to_list(100)
+    return suppliers
+
+@api_router.post("/product-suppliers")
+async def create_product_supplier(data: ProductSupplierCreate, current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    new_supplier = ProductSupplier(company_id=current_user["company_id"], **data.model_dump(exclude_unset=True))
+    doc = new_supplier.model_dump()
+    doc['created_at'] = doc['created_at'].isoformat()
+    await database.product_suppliers.insert_one(doc)
+    return new_supplier
+
+# --- Sales Purchases (Finished Goods) ---
+@api_router.get("/sales-purchases")
+async def get_sales_purchases(current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    invoices = await database.sales_purchases.find({"company_id": current_user["company_id"]}, {"_id": 0}).sort("created_at", -1).to_list(500)
+    return invoices
+
+@api_router.post("/sales-purchases")
+async def create_sales_purchase(invoice: PurchaseInvoiceCreate, current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    doc = invoice.model_dump()
+    doc["id"] = str(uuid.uuid4())
+    doc["company_id"] = current_user["company_id"]
+    doc["created_at"] = datetime.now(timezone.utc).isoformat()
+    doc["total_amount"] = 0
+    
+    for item in doc.get("items", []):
+        qty = item.get("quantity", 0)
+        price = item.get("unit_price", 0)
+        item["total"] = qty * price
+        doc["total_amount"] += item["total"]
+        
+        prod_id = item.get("raw_material_id")
+        if prod_id:
+            await database.products.update_one(
+                {"id": prod_id, "company_id": current_user["company_id"]},
+                {
+                    "$inc": {"stock_current": qty},
+                    "$set": {"cost_buy": price}
+                }
+            )
+        else:
+            new_prod_id = str(uuid.uuid4())
+            item["raw_material_id"] = new_prod_id
+            new_prod = {
+                "id": new_prod_id,
+                "company_id": current_user["company_id"],
+                "name": item.get("raw_material_name", "Sin nombre"),
+                "sku": f"PROD-{int(datetime.now(timezone.utc).timestamp())}-{random.randint(100,999)}",
+                "stock_current": qty,
+                "stock_min": 0,
+                "cost_buy": price,
+                "cost_sell": price * 1.3,
+                "has_iva": False,
+                "created_at": datetime.now(timezone.utc).isoformat()
+            }
+            await database.products.insert_one(new_prod)
+
+    await database.sales_purchases.insert_one(doc)
+    doc.pop("_id", None)
+    return doc
+
 # ==================== RECIPES ====================
 
 @api_router.get("/recipes", response_model=List[Recipe])
@@ -1378,6 +1483,11 @@ async def get_production_orders(current_user: dict = Depends(get_current_user)):
 @api_router.post("/production-orders", response_model=ProductionOrder)
 async def create_production_order(order_data: ProductionOrderCreate, current_user: dict = Depends(get_current_user)):
     database = get_db()
+    
+    # Generate sequential order number
+    count = await database.production_orders.count_documents({"company_id": current_user["company_id"]})
+    order_number = f"ORD-{str(count + 1).zfill(6)}"
+    
     # Pre-populate checklist from recipe if available
     recipe = await database.recipes.find_one({"id": order_data.recipe_id}, {"_id": 0})
     checklist_alistamiento = []
@@ -1391,6 +1501,7 @@ async def create_production_order(order_data: ProductionOrderCreate, current_use
     
     new_order = ProductionOrder(
         company_id=current_user["company_id"],
+        order_number=order_number,
         created_by=current_user["email"],
         checklist_alistamiento=checklist_alistamiento,
         **order_data.model_dump()
@@ -1595,23 +1706,8 @@ async def create_sale(sale_data: SaleCreate, current_user: dict = Depends(get_cu
     if not current_shift:
         raise HTTPException(status_code=400, detail="No open cash shift. Please open a shift first")
     
-    # Calculate total and update stock
-    total = 0.0
-    for item in sale_data.items:
-        total += item.subtotal
-        
-        # Decrease product stock
-        await database.products.update_one(
-            {"id": item.product_id, "company_id": current_user["company_id"]},
-            {"$inc": {"stock_current": -item.quantity}}
-        )
-        
-        # Save sale item
-        item_dict = item.model_dump()
-        item_dict['company_id'] = current_user["company_id"]
-        item_dict['sale_id'] = sale.id # Link to sale
-        item_dict['created_at'] = sale.created_at.isoformat() # For easier querying
-        await database.sale_items.insert_one(item_dict)
+    # Calculate total first
+    total = sum(item.subtotal for item in sale_data.items)
     
     # Calculate change if payment method is cash
     change = None
@@ -1628,11 +1724,27 @@ async def create_sale(sale_data: SaleCreate, current_user: dict = Depends(get_cu
         amount_paid=sale_data.amount_paid,
         change=change,
         requires_invoice=sale_data.requires_invoice,
-        customer_email=sale_data.customer_email
+        customer_email=sale_data.customer_email,
+        payment_details=sale_data.payment_details
     )
     sale_dict = sale.model_dump()
     sale_dict['created_at'] = sale_dict['created_at'].isoformat()
     await database.sales.insert_one(sale_dict)
+    
+    # Update stock and save items
+    for item in sale_data.items:
+        # Decrease product stock
+        await database.products.update_one(
+            {"id": item.product_id, "company_id": current_user["company_id"]},
+            {"$inc": {"stock_current": -item.quantity}}
+        )
+        
+        # Save sale item
+        item_dict = item.model_dump()
+        item_dict['company_id'] = current_user["company_id"]
+        item_dict['sale_id'] = sale.id # Link to sale
+        item_dict['created_at'] = sale.created_at.isoformat() # For easier querying
+        await database.sale_items.insert_one(item_dict)
     
     # Send invoice if requested
     if sale_data.requires_invoice and sale_data.customer_email:
@@ -1647,6 +1759,39 @@ async def create_sale(sale_data: SaleCreate, current_user: dict = Depends(get_cu
             print(f"Failed to send invoice email: {str(e)}")
     
     return sale
+
+@api_router.post("/sales/{sale_id}/refund")
+async def refund_sale(sale_id: str, data: SaleRefund, current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    sale = await database.sales.find_one({"id": sale_id, "company_id": current_user["company_id"]})
+    if not sale:
+        raise HTTPException(status_code=404, detail="Sale not found")
+        
+    if sale.get("status") == "refunded":
+        raise HTTPException(status_code=400, detail="Sale already refunded")
+        
+    # Get items
+    items = await database.sale_items.find({"sale_id": sale_id}).to_list(100)
+    
+    # Return stock
+    for item in items:
+        await database.products.update_one(
+            {"id": item["product_id"], "company_id": current_user["company_id"]},
+            {"$inc": {"stock_current": item["quantity"]}}
+        )
+        
+    # Update sale
+    await database.sales.update_one(
+        {"id": sale_id},
+        {"$set": {
+            "status": "refunded", 
+            "refunded_at": datetime.now(timezone.utc).isoformat(),
+            "refund_reason": data.reason,
+            "refund_by": data.user_name
+        }}
+    )
+    
+    return {"message": "Sale refunded successfully"}
 
 # ==================== EMPLOYEES ====================
 

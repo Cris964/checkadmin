@@ -12,7 +12,7 @@ export default function Inventory() {
   const [showWarehouseForm, setShowWarehouseForm] = useState(false);
   const [expandedWarehouse, setExpandedWarehouse] = useState(null);
   const [warehouseProducts, setWarehouseProducts] = useState({});
-  const [form, setForm] = useState({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '' });
+  const [form, setForm] = useState({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '', category: '', has_iva: false });
   const [whForm, setWhForm] = useState({ name: '', location: '', description: '' });
   const [editingWarehouse, setEditingWarehouse] = useState(null);
   const [managingWarehouse, setManagingWarehouse] = useState(null);
@@ -85,7 +85,7 @@ export default function Inventory() {
         setShowForm(false);
         setEditingProduct(null);
         setSelectedFile(null);
-        setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '' });
+        setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '', category: '', has_iva: false });
         loadData();
         toast.success(editingProduct ? 'Producto actualizado' : 'Producto creado');
       } catch (e) { 
@@ -97,7 +97,7 @@ export default function Inventory() {
 
   const editProduct = (p) => {
     setEditingProduct(p);
-    setForm({ sku: p.sku, name: p.name, cost_buy: p.cost_buy, cost_sell: p.cost_sell, stock_min: p.stock_min, stock_current: p.stock_current, expiry_date: p.expiry_date || '', warehouse_id: p.warehouse_id || '' });
+    setForm({ sku: p.sku, name: p.name, cost_buy: p.cost_buy, cost_sell: p.cost_sell, stock_min: p.stock_min, stock_current: p.stock_current, expiry_date: p.expiry_date || '', warehouse_id: p.warehouse_id || '', category: p.category || '', has_iva: p.has_iva || false });
     setShowForm(true);
   };
 
@@ -421,6 +421,16 @@ export default function Inventory() {
                     <option value="">Sin asignar</option>
                     {warehouses.map(w => <option key={w.id} value={w.id}>{w.name}</option>)}
                   </select>
+                </div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Categoría</label>
+                  <input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Ej. Abarrotes, Aseo..." />
+                </div>
+                <div className="flex items-center gap-2 mt-6">
+                  <input type="checkbox" id="has_iva" checked={form.has_iva} onChange={(e) => setForm({ ...form, has_iva: e.target.checked })} className="w-4 h-4 text-primary-600 rounded border-gray-300" />
+                  <label htmlFor="has_iva" className="text-sm font-semibold cursor-pointer">Aplica IVA 19%</label>
                 </div>
               </div>
               <div>

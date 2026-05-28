@@ -36,6 +36,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
           <div className="flex items-center gap-2">
             <p className="font-bold text-gray-800 text-lg">{o.recipe_name}</p>
             <span className="text-xs bg-gray-100 text-gray-600 px-2 py-0.5 rounded font-medium">Cant: {o.quantity || 1}</span>
+            {o.order_number && <span className="text-xs bg-blue-100 text-blue-800 px-2 py-0.5 rounded font-bold border border-blue-200">{o.order_number}</span>}
           </div>
           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-gray-400 mt-1">
             <span className="flex items-center gap-1 font-medium text-blue-500"><User size={12} /> {o.created_by || 'Sistema'}</span>
@@ -279,6 +280,7 @@ export default function Production() {
   const [orderQuantity, setOrderQuantity] = useState(1);
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
   const [expandedOrder, setExpandedOrder] = useState(null);
+  const [expandedWarehouse, setExpandedWarehouse] = useState(null);
   const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', purchase_price: '', purchase_quantity: '', purchase_unit_measure: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' });
   const [recipeForm, setRecipeForm] = useState({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', ingredients: [] });
   const [newIngredient, setNewIngredient] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg', purchase_price: 0, purchase_quantity: 1, purchase_unit: 'kg' });
@@ -623,9 +625,10 @@ export default function Production() {
       </div>
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
-        <button onClick={() => setTab('materials')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${tab === 'materials' ? 'tab-active' : 'tab-inactive'}`}>Materias Primas</button>
+        <button onClick={() => setTab('materials')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${tab === 'materials' ? 'tab-active' : 'tab-inactive'}`}>Inventario</button>
         <button onClick={() => setTab('recipes')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${tab === 'recipes' ? 'tab-active' : 'tab-inactive'}`}>Recetas/Kits</button>
         <button onClick={() => setTab('orders')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${tab === 'orders' ? 'tab-active' : 'tab-inactive'}`}>Órdenes</button>
+        <button onClick={() => setTab('warehouses')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${tab === 'warehouses' ? 'tab-active' : 'tab-inactive'}`}>Bodegas</button>
       </div>
 
       {tab === 'orders' && (
@@ -780,6 +783,63 @@ export default function Production() {
         </div>
       )}
 
+      {tab === 'warehouses' && (
+        <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+            {(warehouses || []).map((w) => {
+              const isExpanded = expandedWarehouse === w.id;
+              const materialsInWarehouse = (rawMaterials || []).filter(m => m.warehouse_id === w.id);
+              
+              return (
+                <div key={w.id} className="glass-card overflow-hidden transition-all duration-300">
+                  <div 
+                    onClick={() => setExpandedWarehouse(isExpanded ? null : w.id)}
+                    className="p-4 cursor-pointer hover:bg-gray-50 flex items-center justify-between"
+                  >
+                    <div className="flex items-center gap-3">
+                      <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center text-blue-600">
+                        <Boxes size={20} />
+                      </div>
+                      <div>
+                        <h3 className="font-bold text-gray-800">{w.name}</h3>
+                        <p className="text-xs text-gray-500">{materialsInWarehouse.length} materias primas</p>
+                      </div>
+                    </div>
+                    <ChevronRight size={20} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                  </div>
+                  
+                  {isExpanded && (
+                    <div className="border-t border-gray-100 bg-gray-50 p-4">
+                      {materialsInWarehouse.length === 0 ? (
+                        <p className="text-sm text-gray-400 text-center py-4">Bodega vacía</p>
+                      ) : (
+                        <div className="space-y-2 max-h-64 overflow-y-auto">
+                          {materialsInWarehouse.map(m => (
+                            <div key={m.id} className="bg-white p-2 rounded border border-gray-200 flex justify-between items-center text-sm">
+                              <div className="flex-1 min-w-0">
+                                <p className="font-semibold text-gray-800 truncate">{m.name}</p>
+                                <p className="text-xs text-gray-500">{m.sku} • Stock: <span className="font-bold">{m.current_stock}</span> {m.unit}</p>
+                              </div>
+                              <button 
+                                onClick={(e) => { e.stopPropagation(); setEditingMaterial(m); setShowMaterialForm(true); }}
+                                className="p-1.5 text-blue-500 hover:bg-blue-50 rounded flex items-center gap-1 transition-colors"
+                              >
+                                <Edit2 size={14} /> <span className="text-xs font-medium">Editar</span>
+                              </button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+          {warehouses.length === 0 && <p className="text-center text-gray-500 py-8">No hay bodegas registradas</p>}
+        </div>
+      )}
+
       {tab === 'materials' && (
         <div className="mt-6">
           <div className="flex items-center justify-between mb-4">
@@ -800,7 +860,8 @@ export default function Production() {
                 </thead>
                 <tbody>
                   {(purchaseInvoices || []).map((inv, i) => (
-                      <tr key={inv.id || i} className="border-t border-gray-100 hover:bg-gray-50 group cursor-pointer" onClick={() => setExpandedOrder(expandedOrder === inv.id ? null : inv.id)}>
+                    <React.Fragment key={inv.id || i}>
+                      <tr className="border-t border-gray-100 hover:bg-gray-50 group cursor-pointer" onClick={() => setExpandedOrder(expandedOrder === inv.id ? null : inv.id)}>
                         <td className="px-4 py-3 font-medium">{inv.items?.length || 1} ítems</td>
                         <td className="px-4 py-3">{inv.supplier || '—'}</td>
                         <td className="px-4 py-3 font-medium">{inv.invoice_number || '—'}</td>
@@ -831,8 +892,8 @@ export default function Production() {
                           </td>
                         </tr>
                       )}
-                    );
-                  })}
+                    </React.Fragment>
+                  ))}
                 </tbody>
               </table>
             )}

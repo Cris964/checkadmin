@@ -9,6 +9,7 @@ export default function SalesTPV() {
   const [products, setProducts] = useState([]);
   const [cart, setCart] = useState([]);
   const [search, setSearch] = useState('');
+  const [selectedCategory, setSelectedCategory] = useState('');
   const [summary, setSummary] = useState(null);
   const [initialAmount, setInitialAmount] = useState('');
   const [showPayment, setShowPayment] = useState(false);
@@ -37,6 +38,21 @@ export default function SalesTPV() {
   const [custForm, setCustForm] = useState({ name: '', email: '', phone: '', address: '', document: '' });
   const [editingCustomer, setEditingCustomer] = useState(null);
   const [custSearch, setCustSearch] = useState('');
+
+  // Sales Purchases and Suppliers
+  const [salesPurchases, setSalesPurchases] = useState([]);
+  const [productSuppliers, setProductSuppliers] = useState([]);
+
+  const loadPurchasesAndSuppliers = async () => {
+    try {
+      const [pRes, sRes] = await Promise.all([
+        api.get('/sales-purchases').catch(() => ({ data: [] })),
+        api.get('/product-suppliers').catch(() => ({ data: [] }))
+      ]);
+      setSalesPurchases(pRes.data);
+      setProductSuppliers(sRes.data);
+    } catch (e) { console.error(e); }
+  };
 
   const printRef = useRef();
 
@@ -74,7 +90,7 @@ export default function SalesTPV() {
     } catch (e) { console.error(e); }
   };
 
-  useEffect(() => { loadData(); loadCustomers(); }, []);
+  useEffect(() => { loadData(); loadCustomers(); loadPurchasesAndSuppliers(); }, []);
 
   const openShift = async () => {
     try {
@@ -105,7 +121,8 @@ export default function SalesTPV() {
           : i
         );
       }
-      return [...prev, { product_id: product.id, product_name: product.name, quantity: 1, price: product.cost_sell, subtotal: product.cost_sell }];
+      const price = product.has_iva ? product.cost_sell * 1.19 : product.cost_sell;
+      return [...prev, { product_id: product.id, product_name: product.name, quantity: 1, price: price, subtotal: price, has_iva: product.has_iva }];
     });
   };
 
@@ -155,6 +172,7 @@ export default function SalesTPV() {
       };
       await api.post('/sales', saleData);
       setLastSale({
+        id: saleData.id || `TMP-${Date.now()}`,
         items: [...cart],
         total: cartTotal,
         payment_method: paymentMethod,
@@ -163,6 +181,7 @@ export default function SalesTPV() {
         change: paymentMethod === 'efectivo' ? (parseFloat(amountPaid) || cartTotal) - cartTotal : 0,
         date: new Date().toLocaleString('es-CO'),
         customer_email: customerEmail,
+        user_name: shift?.user_name || 'Sistema'
       });
       setCart([]);
       setShowPayment(false);
@@ -206,6 +225,17 @@ export default function SalesTPV() {
     setSendingEmail(false);
   };
 
+  const refundSale = async (sale) => {
+    if (sale.status === 'refunded') return;
+    const reason = prompt('Motivo de la devolución:');
+    if (!reason) return;
+    try {
+      await api.post(`/sales/${sale.id}/refund`, { user_name: shift?.user_name || 'Sistema', reason });
+      toast.success('Venta devuelta y stock restaurado');
+      loadData(); // Reload history
+    } catch (e) { toast.error(e.response?.data?.detail || 'Error al devolver'); }
+  };
+
   const loadHistory = async () => {
     try {
       const res = await api.get('/cash-shifts/history');
@@ -236,9 +266,13 @@ export default function SalesTPV() {
     loadCustomers();
   };
 
-  const filtered = products.filter((p) =>
-    p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase())
-  );
+  const filtered = products.filter((p) => {
+    const matchSearch = p.name.toLowerCase().includes(search.toLowerCase()) || p.sku.toLowerCase().includes(search.toLowerCase());
+    const matchCategory = selectedCategory ? p.category === selectedCategory : true;
+    return matchSearch && matchCategory;
+  });
+
+  const categories = [...new Set(products.map(p => p.category).filter(Boolean))];
 
   const filteredCustomers = customers.filter(c =>
     c.name.toLowerCase().includes(custSearch.toLowerCase()) || (c.email || '').toLowerCase().includes(custSearch.toLowerCase())
@@ -269,10 +303,12 @@ export default function SalesTPV() {
       </div>
 
       {/* Main Tabs */}
-      <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
+      <div className="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-lg w-fit">
         <button onClick={() => setMainTab('tpv')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'tpv' ? 'tab-active' : 'tab-inactive'}`}>Punto de Venta</button>
         <button onClick={() => setMainTab('history')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'history' ? 'tab-active' : 'tab-inactive'}`}>Historial de Ventas</button>
         <button onClick={() => setMainTab('customers')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'customers' ? 'tab-active' : 'tab-inactive'}`}>Clientes</button>
+        <button onClick={() => setMainTab('purchases')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'purchases' ? 'tab-active' : 'tab-inactive'}`}>Ingreso Compras</button>
+        <button onClick={() => setMainTab('suppliers')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'suppliers' ? 'tab-active' : 'tab-inactive'}`}>Proveedores</button>
       </div>
 
       {mainTab === 'customers' && (
@@ -591,8 +627,13 @@ export default function SalesTPV() {
                     )}
                   </div>
                   <div className="text-right">
-                    <p className="text-lg font-bold text-primary-600">{fmt(s.total)}</p>
-                    <p className="text-xs text-gray-400">Items: {s.items?.length || 0}</p>
+                    <p className={`text-lg font-bold ${s.status === 'refunded' ? 'text-red-500 line-through' : 'text-primary-600'}`}>{fmt(s.total)}</p>
+                    <p className="text-xs text-gray-400 mb-2">Items: {s.items?.length || 0}</p>
+                    {s.status === 'refunded' ? (
+                      <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-1 rounded">Devuelto</span>
+                    ) : (
+                      <button onClick={() => refundSale(s)} className="text-[10px] font-bold bg-orange-100 text-orange-600 px-2 py-1 rounded hover:bg-orange-200">Devolver Venta</button>
+                    )}
                   </div>
                 </div>
               </div>
@@ -600,6 +641,58 @@ export default function SalesTPV() {
           </div>
         </div>
       )}
+
+      {mainTab === 'purchases' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold">Ingreso de Compras (Productos)</h2>
+          </div>
+          <div className="glass-card overflow-hidden">
+            {salesPurchases.length === 0 ? (
+              <p className="text-gray-400 text-center py-12">No hay facturas de compra registradas</p>
+            ) : (
+              salesPurchases.map(p => (
+                <div key={p.id} className="p-4 border-b border-gray-100 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                  <div>
+                    <p className="font-bold text-gray-800">Factura #{p.id.slice(0,8).toUpperCase()}</p>
+                    <p className="text-xs text-gray-400">{new Date(p.created_at).toLocaleString('es-CO')}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-lg font-bold text-primary-600">{fmt(p.total_amount)}</p>
+                    <p className="text-xs text-gray-400">Items: {p.items?.length || 0}</p>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
+      {mainTab === 'suppliers' && (
+        <div className="space-y-4">
+          <div className="flex justify-between items-center">
+            <h2 className="text-xl font-bold">Proveedores (Productos)</h2>
+          </div>
+          <div className="glass-card overflow-hidden">
+            {productSuppliers.length === 0 ? (
+              <p className="text-gray-400 text-center py-12">No hay proveedores registrados</p>
+            ) : (
+              productSuppliers.map(s => (
+                <div key={s.id} className="p-4 border-b border-gray-100 flex items-center justify-between hover:bg-gray-50 transition-colors">
+                  <div>
+                    <p className="font-bold text-gray-800">{s.name}</p>
+                    <p className="text-xs text-gray-400">{s.email || 'Sin email'} · {s.phone || 'Sin teléfono'}</p>
+                  </div>
+                  <div>
+                    <span className="text-xs font-semibold bg-gray-100 px-2 py-1 rounded text-gray-600">PROVEEDOR</span>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
+        </div>
+      )}
+
       {showInvoice && lastSale && (
         <div className="modal-overlay" onClick={() => setShowInvoice(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '28rem' }}>
@@ -633,7 +726,15 @@ export default function SalesTPV() {
                 </tbody>
               </table>
               <div style={{ borderTop: '2px solid #333', marginTop: '8px', paddingTop: '8px' }}>
-                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666', marginBottom: '2px' }}>
+                  <span>Subtotal</span>
+                  <span>{fmt(lastSale.items.reduce((sum, i) => sum + (i.has_iva ? i.subtotal / 1.19 : i.subtotal), 0))}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '12px', color: '#666', marginBottom: '4px' }}>
+                  <span>IVA (19%)</span>
+                  <span>{fmt(lastSale.total - lastSale.items.reduce((sum, i) => sum + (i.has_iva ? i.subtotal / 1.19 : i.subtotal), 0))}</span>
+                </div>
+                <div style={{ display: 'flex', justifyContent: 'space-between', fontSize: '16px', fontWeight: 'bold', borderTop: '1px solid #eee', paddingTop: '4px' }}>
                   <span>TOTAL</span>
                   <span>{fmt(lastSale.total)}</span>
                 </div>
@@ -649,6 +750,7 @@ export default function SalesTPV() {
                 )}
               </div>
               <p style={{ textAlign: 'center', marginTop: '16px', fontSize: '10px', color: '#999' }}>¡Gracias por su compra!</p>
+              <p style={{ textAlign: 'center', marginTop: '4px', fontSize: '10px', color: '#ccc' }}>Responsable: {lastSale.user_name}</p>
             </div>
             <div className="flex gap-2 mt-5 no-print">
               <button onClick={printInvoice} className="flex-1 btn-primary justify-center py-2.5">
