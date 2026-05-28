@@ -219,7 +219,7 @@ export default function Inventory() {
               <Download size={16} /> Exportar
             </button>
             <button onClick={() => setShowImportModal(true)} className="btn-secondary" title="Importar desde Excel">
-              <Upload size={16} /> Importar
+              <Upload size={16} /> Carga Masiva (Excel)
             </button>
             <button onClick={() => { setEditingProduct(null); setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '' }); setShowForm(true); }} className="btn-primary">
               <Plus size={16} /> Nuevo Producto

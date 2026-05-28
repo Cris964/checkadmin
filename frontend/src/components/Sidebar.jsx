@@ -9,7 +9,6 @@ const getNavItems = (userEmail) => {
   const items = [
     { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
     { to: '/dashboard/sales', icon: ShoppingCart, label: 'Ventas TPV' },
-    { to: '/dashboard/inventory', icon: Package, label: 'Inventario' },
     { to: '/dashboard/production', icon: Factory, label: 'Producción' },
     { to: '/dashboard/payroll', icon: Users2, label: 'Nómina' },
     { to: '/dashboard/finance', icon: DollarSign, label: 'Finanzas' },

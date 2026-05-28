@@ -2,6 +2,7 @@ import { useEffect, useState, useRef } from 'react';
 import api, { getAssetUrl } from '../lib/api';
 import { toast } from 'sonner';
 import { DollarSign, CreditCard, Receipt, Banknote, Search, ShoppingCart, Plus, Minus, History, X, Package, Printer, Mail, Users2, Pencil, Trash2 } from 'lucide-react';
+import Inventory from './Inventory';
 
 export default function SalesTPV() {
   const [mainTab, setMainTab] = useState('tpv');
@@ -309,6 +310,7 @@ export default function SalesTPV() {
         <button onClick={() => setMainTab('customers')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'customers' ? 'tab-active' : 'tab-inactive'}`}>Clientes</button>
         <button onClick={() => setMainTab('purchases')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'purchases' ? 'tab-active' : 'tab-inactive'}`}>Ingreso Compras</button>
         <button onClick={() => setMainTab('suppliers')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'suppliers' ? 'tab-active' : 'tab-inactive'}`}>Proveedores</button>
+        <button onClick={() => setMainTab('inventory')} className={`px-4 py-1.5 text-sm font-medium rounded-md transition-all ${mainTab === 'inventory' ? 'tab-active' : 'tab-inactive'}`}>Inventario</button>
       </div>
 
       {mainTab === 'customers' && (
@@ -690,6 +692,12 @@ export default function SalesTPV() {
               ))
             )}
           </div>
+        </div>
+      )}
+
+      {mainTab === 'inventory' && (
+        <div className="bg-white rounded-lg p-2 min-h-[80vh]">
+          <Inventory />
         </div>
       )}
 
