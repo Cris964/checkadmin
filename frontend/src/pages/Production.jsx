@@ -43,6 +43,9 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
             <span className="flex items-center gap-1"><Home size={12} /> {o.warehouse_id ? (warehouses || []).find(w => w.id === o.warehouse_id)?.name : 'Sin bodega'}</span>
             <span>{new Date(o.created_at).toLocaleString('es-CO')}</span>
             {o.start_time && <span className="flex items-center gap-1"><Clock size={12} /> {new Date(o.start_time).toLocaleTimeString('es-CO')}</span>}
+            {o.product_type && <span className="font-bold text-gray-700 bg-gray-100 px-2 py-0.5 rounded">TIPO: {o.product_type}</span>}
+            {o.lote && <span className="font-bold text-purple-700 bg-purple-100 px-2 py-0.5 rounded border border-purple-200">LOTE: {o.lote}</span>}
+            {o.vencimiento && <span className="font-bold text-red-700 bg-red-100 px-2 py-0.5 rounded border border-red-200">VENCE: {o.vencimiento}</span>}
           </div>
           {o.novedades && (
             <div className="mt-2 p-2 bg-yellow-50 border-l-2 border-yellow-400 text-xs text-yellow-800 italic">
@@ -66,6 +69,12 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
       </div>
       {isExpanded && recipe && (
         <div className="px-4 pb-4 border-t border-gray-100 animate-fade-in bg-gray-50/50">
+          <div className="mb-4 flex flex-wrap gap-4 items-start bg-white p-3 rounded-lg border border-gray-200">
+            {recipe.image_url && <div className="text-center"><p className="text-[10px] font-bold text-gray-400 mb-1">PRODUCTO</p><img src={getAssetUrl(recipe.image_url)} alt="Producto" className="w-16 h-16 object-cover rounded shadow" /></div>}
+            {recipe.label_image_url && <div className="text-center"><p className="text-[10px] font-bold text-gray-400 mb-1">ETIQUETA</p><img src={getAssetUrl(recipe.label_image_url)} alt="Etiqueta" className="w-16 h-16 object-cover rounded shadow" /></div>}
+            {recipe.box_image_url && <div className="text-center"><p className="text-[10px] font-bold text-gray-400 mb-1">CAJA</p><img src={getAssetUrl(recipe.box_image_url)} alt="Caja" className="w-16 h-16 object-cover rounded shadow" /></div>}
+            {recipe.internal_coding && <div className="ml-auto"><p className="text-[10px] font-bold text-gray-400 mb-1">CÓDIGO INTERNO</p><span className="font-mono bg-gray-100 p-1 rounded text-sm">{recipe.internal_coding}</span></div>}
+          </div>
           {(o.stage === 'alistamiento' || o.stage === 'montada') && (
             <div className="mt-4 space-y-4">
               <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">LISTA DE ALISTAMIENTO (PRE-ALISTADOR)</p>
@@ -121,7 +130,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                 </div>
                 <button 
                   disabled={!responsable || localChecklist.length < (recipe.ingredients?.length || 0)}
-                  onClick={() => advanceOrder(o.id || o._id, 'procesamiento', { 
+                  onClick={() => advanceOrder(o.id || o._id, 'pesaje', { 
                     responsable_alistamiento: responsable,
                     checklist_alistamiento: (recipe.ingredients || []).map(ing => ({
                       material_id: ing.raw_material_id,
@@ -131,82 +140,126 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                   })}
                   className="btn-primary w-full sm:w-auto h-[42px] px-6 font-bold uppercase tracking-widest text-xs"
                 >
-                  Pasar a Procesamiento
+                  Pasar a Pesaje
                 </button>
               </div>
             </div>
           )}
 
-          {o.stage === 'procesamiento' && (
+          {o.stage === 'pesaje' && (
             <div className="mt-4 space-y-4">
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">CONTROL DE CALIDAD (OPERARIO)</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">PESAJE (VERIFICACIÓN Y FIRMA)</p>
               <div className="bg-white p-4 rounded-xl border-2 border-primary-100 mb-4">
-                <p className="text-xs font-bold text-primary-700 mb-2">INSTRUCCIONES DE RECETA:</p>
-                <p className="text-sm text-gray-600 italic">{recipe.description || 'Seguir proceso estándar de fabricación.'}</p>
-              </div>
-              <div className="space-y-2">
-                {[
-                  'Verificó cantidades e ingredientes según receta',
-                  'Proceso de mezclado/fabricación completado',
-                  'Etiquetado y empaque verificado',
-                  'Cumple con estándares de calidad visual'
-                ].map((task, i) => {
-                  const isChecked = localChecklist.includes(task);
-                  return (
-                    <div 
-                      key={i} 
-                      onClick={() => {
-                        if (isChecked) setLocalChecklist(localChecklist.filter(t => t !== task));
-                        else setLocalChecklist([...localChecklist, task]);
-                      }}
-                      className="flex items-center gap-3 p-3 rounded-lg border-2 cursor-pointer hover:bg-white transition-all border-gray-50"
-                    >
-                      <div className={`w-5 h-5 rounded-full border-2 flex items-center justify-center ${isChecked ? 'bg-primary-500 border-primary-500 text-white' : 'border-gray-300'}`}>
-                        {isChecked && '✓'}
-                      </div>
-                      <span className={`text-sm ${isChecked ? 'text-gray-900 font-medium' : 'text-gray-500'}`}>{task}</span>
-                    </div>
-                  );
-                })}
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 mt-4">
-                <div className="col-span-1">
-                  <label className="block text-[10px] font-bold text-gray-400 mb-1">RESPONSABLE CALIDAD</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg"
-                    placeholder="Nombre del operario..."
-                    value={responsable}
-                    onChange={(e) => setResponsable(e.target.value)}
-                  />
+                <p className="text-sm font-semibold">Declaro que he verificado el peso exacto de las materias primas para esta orden y coinciden con la receta.</p>
+                <div className="mt-4 flex gap-4 items-center">
+                  <label className="flex items-center gap-2 cursor-pointer bg-gray-50 p-3 rounded-lg border border-gray-200 w-full hover:bg-gray-100 transition-colors">
+                    <input type="checkbox" className="w-5 h-5 text-primary-600 rounded" checked={localChecklist.includes('peso_ok')} onChange={(e) => e.target.checked ? setLocalChecklist(['peso_ok']) : setLocalChecklist([])} />
+                    <span className="font-bold text-gray-700">TODO CONFORME Y PESADO</span>
+                  </label>
                 </div>
-                <div className="col-span-1">
-                  <label className="block text-[10px] font-bold text-gray-400 mb-1">OBSERVACIONES / NOVEDADES (OPCIONAL)</label>
-                  <input 
-                    type="text" 
-                    className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg"
-                    placeholder="Ej: lote de goma estaba un poco seco..."
-                    value={observations}
-                    onChange={(e) => setObservations(e.target.value)}
-                  />
+                <div className="mt-4">
+                  <label className="block text-[10px] font-bold text-gray-400 mb-1">FIRMA / RESPONSABLE PESAJE</label>
+                  <input type="text" className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg" value={responsable} onChange={(e) => setResponsable(e.target.value)} placeholder="Nombre del responsable..." />
                 </div>
               </div>
               <button 
-                disabled={!responsable || localChecklist.length < 4}
-                onClick={() => {
-                  const actual = prompt("Cantidad final producida:", o.quantity);
-                  if (actual) {
-                    advanceOrder(o.id || o._id, 'terminada', { 
-                      checklist_procesamiento: localChecklist.map(t => ({task: t, checked: true})),
-                      responsable_procesamiento: responsable,
-                      novedades: observations,
-                      actual_output: parseInt(actual)
-                    });
-                  }
-                }}
-                className="btn-primary w-full py-3 font-bold uppercase tracking-widest text-sm mt-2"
+                disabled={!responsable || !localChecklist.includes('peso_ok')}
+                onClick={() => advanceOrder(o.id || o._id, 'pre_fabricacion', { 
+                  form_pesaje_firma: { responsable, ok: true }
+                })}
+                className="btn-primary w-full py-3 font-bold uppercase tracking-widest text-sm"
               >
-                Finalizar Orden de Producción
+                Pasar a Pre-Fabricación
+              </button>
+            </div>
+          )}
+
+          {o.stage === 'pre_fabricacion' && (
+            <div className="mt-4 space-y-4">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">PRE-FABRICACIÓN (CONTROLES)</p>
+              <div className="space-y-3">
+                {['Despeje de Área', 'Desinfección', 'Verificación de Agua', 'Higiene Personal'].map(item => (
+                  <label key={item} className="flex items-center gap-3 p-3 rounded-lg border-2 border-gray-100 bg-white cursor-pointer hover:bg-gray-50">
+                    <input type="checkbox" className="w-5 h-5 text-primary-600 rounded" checked={localChecklist.includes(item)} onChange={(e) => {
+                      if (e.target.checked) setLocalChecklist([...localChecklist, item]);
+                      else setLocalChecklist(localChecklist.filter(x => x !== item));
+                    }} />
+                    <span className="font-bold text-sm text-gray-700">{item}</span>
+                  </label>
+                ))}
+              </div>
+              <button 
+                disabled={localChecklist.length < 4}
+                onClick={() => advanceOrder(o.id || o._id, 'mezclado_llenado', { 
+                  form_despeje_fabricacion: { ok: localChecklist.includes('Despeje de Área') },
+                  form_desinfeccion: { ok: localChecklist.includes('Desinfección') },
+                  form_agua: { ok: localChecklist.includes('Verificación de Agua') },
+                  form_higiene: { ok: localChecklist.includes('Higiene Personal') },
+                })}
+                className="btn-primary w-full py-3 font-bold uppercase tracking-widest text-sm"
+              >
+                Pasar a Mezclado y Llenado
+              </button>
+            </div>
+          )}
+
+          {o.stage === 'mezclado_llenado' && (
+            <div className="mt-4 space-y-4">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">MEZCLADO Y LLENADO</p>
+              <div className="bg-white p-4 rounded-xl border-2 border-primary-100">
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 mb-1">TIEMPO DE MEZCLADO (MIN)</label>
+                    <input type="number" className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg" value={observations} onChange={(e) => setObservations(e.target.value)} placeholder="Ej: 45" />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 mb-1">PESO/VOLUMEN PROM (g/ml)</label>
+                    <input type="number" className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg" value={responsable} onChange={(e) => setResponsable(e.target.value)} placeholder="Ej: 500" />
+                  </div>
+                </div>
+              </div>
+              <button 
+                disabled={!observations || !responsable}
+                onClick={() => advanceOrder(o.id || o._id, 'etiquetado', { 
+                  form_tiempos_mezclado: { tiempo_minutos: observations },
+                  form_peso_volumen: { promedio: responsable }
+                })}
+                className="btn-primary w-full py-3 font-bold uppercase tracking-widest text-sm"
+              >
+                Pasar a Etiquetado
+              </button>
+            </div>
+          )}
+
+          {o.stage === 'etiquetado' && (
+            <div className="mt-4 space-y-4">
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-widest">ETIQUETADO Y BODEGA</p>
+              <div className="bg-white p-4 rounded-xl border-2 border-primary-100">
+                <label className="flex items-center gap-2 cursor-pointer bg-gray-50 p-3 rounded-lg border border-gray-200 w-full hover:bg-gray-100 transition-colors mb-4">
+                  <input type="checkbox" className="w-5 h-5 text-primary-600 rounded" checked={localChecklist.includes('etiquetas_ok')} onChange={(e) => e.target.checked ? setLocalChecklist(['etiquetas_ok']) : setLocalChecklist([])} />
+                  <span className="font-bold text-gray-700">Lote, Fechas y Etiquetas Correctas</span>
+                </label>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 mb-1">CANTIDAD FINAL PRODUCIDA (OK)</label>
+                    <input type="number" className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg" value={responsable} onChange={(e) => setResponsable(e.target.value)} placeholder="Unidades finales..." />
+                  </div>
+                  <div>
+                    <label className="block text-[10px] font-bold text-gray-400 mb-1">NOVEDADES / MERMAS</label>
+                    <input type="text" className="w-full p-2 text-sm border-2 border-gray-100 rounded-lg" value={observations} onChange={(e) => setObservations(e.target.value)} placeholder="Ej: 2 unidades con defectos" />
+                  </div>
+                </div>
+              </div>
+              <button 
+                disabled={!responsable || !localChecklist.includes('etiquetas_ok')}
+                onClick={() => advanceOrder(o.id || o._id, 'terminada', { 
+                  actual_output: parseInt(responsable),
+                  novedades: observations,
+                  form_recepcion_bodega: { ingresado: true }
+                })}
+                className="btn-primary w-full py-3 font-bold uppercase tracking-widest text-sm"
+              >
+                Enviar a Bodega (Terminar Orden)
               </button>
             </div>
           )}
@@ -242,16 +295,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
           {o.stage === 'terminada' && (
             <div className="mt-4 p-4 bg-green-50 rounded-xl border border-green-200">
               <p className="text-sm font-bold text-green-800 mb-2">ORDEN COMPLETADA</p>
-              <div className="grid grid-cols-2 gap-4 text-xs font-medium text-green-700">
-                <div>
-                  <p className="text-[10px] text-green-600/60 uppercase">RESP. ALISTAMIENTO</p>
-                  <p>{o.responsable_alistamiento || '—'}</p>
-                </div>
-                <div>
-                  <p className="text-[10px] text-green-600/60 uppercase">RESP. PROCESAMIENTO</p>
-                  <p>{o.responsable_procesamiento || '—'}</p>
-                </div>
-                <div className="col-span-2 mt-2">
+                <div className="col-span-2">
                   <p className="text-[10px] text-green-600/60 uppercase">TIEMPO FINALIZACIÓN</p>
                   <p>{o.end_time ? new Date(o.end_time).toLocaleString('es-CO') : '—'}</p>
                 </div>
@@ -278,14 +322,17 @@ export default function Production() {
   const [editingMaterial, setEditingMaterial] = useState(null);
   const [selectedRecipe, setSelectedRecipe] = useState('');
   const [orderQuantity, setOrderQuantity] = useState(1);
+  const [orderProductType, setOrderProductType] = useState('H');
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [expandedWarehouse, setExpandedWarehouse] = useState(null);
   const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', purchase_price: '', purchase_quantity: '', purchase_unit_measure: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' });
-  const [recipeForm, setRecipeForm] = useState({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', ingredients: [] });
+  const [recipeForm, setRecipeForm] = useState({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', label_image_url: '', box_image_url: '', internal_coding: '', ingredients: [] });
   const [newIngredient, setNewIngredient] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg', purchase_price: 0, purchase_quantity: 1, purchase_unit: 'kg' });
   const [uploading, setUploading] = useState(false);
   const [selectedRecipeFile, setSelectedRecipeFile] = useState(null);
+  const [selectedLabelFile, setSelectedLabelFile] = useState(null);
+  const [selectedBoxFile, setSelectedBoxFile] = useState(null);
   const [selectedMaterialFile, setSelectedMaterialFile] = useState(null);
   const [searchMaterials, setSearchMaterials] = useState('');
   const [searchRecipes, setSearchRecipes] = useState('');
@@ -298,6 +345,16 @@ export default function Production() {
   const handleRecipeFileChange = (e) => {
     if (e.target.files && e.target.files[0]) {
       setSelectedRecipeFile(e.target.files[0]);
+    }
+  };
+  const handleLabelFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedLabelFile(e.target.files[0]);
+    }
+  };
+  const handleBoxFileChange = (e) => {
+    if (e.target.files && e.target.files[0]) {
+      setSelectedBoxFile(e.target.files[0]);
     }
   };
 
@@ -341,10 +398,11 @@ export default function Production() {
         recipe_id: recipe.id, 
         recipe_name: recipe.output_product_name, 
         quantity: validQty,
+        product_type: orderProductType,
         warehouse_id: selectedWarehouse || null,
         start_time: new Date().toISOString()
       });
-      setShowOrderForm(false); setSelectedRecipe(''); setOrderQuantity(1); setSelectedWarehouse(''); loadData();
+      setShowOrderForm(false); setSelectedRecipe(''); setOrderQuantity(1); setOrderProductType('H'); setSelectedWarehouse(''); loadData();
       toast.success('Orden de producción creada');
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al crear orden');
@@ -397,7 +455,21 @@ export default function Production() {
       if (selectedRecipeFile && recipeId) {
         const formData = new FormData();
         formData.append('file', selectedRecipeFile);
-        await api.post(`upload/recipe-image/${recipeId}`, formData, {
+        await api.post(`upload/recipe-image/${recipeId}?image_type=main`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+      if (selectedLabelFile && recipeId) {
+        const formData = new FormData();
+        formData.append('file', selectedLabelFile);
+        await api.post(`upload/recipe-image/${recipeId}?image_type=label`, formData, {
+          headers: { 'Content-Type': 'multipart/form-data' }
+        });
+      }
+      if (selectedBoxFile && recipeId) {
+        const formData = new FormData();
+        formData.append('file', selectedBoxFile);
+        await api.post(`upload/recipe-image/${recipeId}?image_type=box`, formData, {
           headers: { 'Content-Type': 'multipart/form-data' }
         });
       }
@@ -405,7 +477,9 @@ export default function Production() {
       setShowRecipeForm(false); 
       setEditingRecipe(null); 
       setSelectedRecipeFile(null);
-      setRecipeForm({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', ingredients: [] }); 
+      setSelectedLabelFile(null);
+      setSelectedBoxFile(null);
+      setRecipeForm({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', label_image_url: '', box_image_url: '', internal_coding: '', ingredients: [] }); 
       loadData();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al guardar receta');
@@ -423,6 +497,9 @@ export default function Production() {
       output_product_name: recipe.output_product_name,
       expected_quantity: recipe.expected_quantity,
       image_url: recipe.image_url || '',
+      label_image_url: recipe.label_image_url || '',
+      box_image_url: recipe.box_image_url || '',
+      internal_coding: recipe.internal_coding || '',
       ingredients: recipe.ingredients || []
     });
     setShowRecipeForm(true);
@@ -550,8 +627,16 @@ export default function Production() {
     setShowMaterialForm(true);
   };
 
-  const stages = ['montada', 'alistamiento', 'procesamiento', 'terminada'];
-  const stageColors = { montada: 'badge-blue', alistamiento: 'badge-yellow', procesamiento: 'badge-purple', terminada: 'badge-green' };
+  const stages = ['montada', 'alistamiento', 'pesaje', 'pre_fabricacion', 'mezclado_llenado', 'etiquetado', 'terminada'];
+  const stageColors = { 
+    montada: 'badge-blue', 
+    alistamiento: 'badge-yellow', 
+    pesaje: 'badge-purple', 
+    pre_fabricacion: 'badge-orange', 
+    mezclado_llenado: 'badge-red', 
+    etiquetado: 'badge-indigo', 
+    terminada: 'badge-green' 
+  };
   const stageIdx = (stage) => stages.indexOf(stage);
 
   const getRecipeForOrder = (order) => (recipes || []).find(r => r?.id === order?.recipe_id);
@@ -605,23 +690,16 @@ export default function Production() {
       </div>
 
       {/* Stats */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
-        <div className="glass-card p-4 stat-blue">
-          <p className="text-xs font-semibold text-gray-500 tracking-wider">MONTADAS</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{ordersByStage.montada?.length || 0}</p>
-        </div>
-        <div className="glass-card p-4 stat-yellow">
-          <p className="text-xs font-semibold text-gray-500 tracking-wider">ALISTAMIENTO</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{ordersByStage.alistamiento?.length || 0}</p>
-        </div>
-        <div className="glass-card p-4 stat-purple">
-          <p className="text-xs font-semibold text-gray-500 tracking-wider">PROCESAMIENTO</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{ordersByStage.procesamiento?.length || 0}</p>
-        </div>
-        <div className="glass-card p-4 stat-green">
-          <p className="text-xs font-semibold text-gray-500 tracking-wider">TERMINADAS</p>
-          <p className="text-2xl font-bold text-gray-900 mt-1">{ordersByStage.terminada?.length || 0}</p>
-        </div>
+      <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2">
+        {(stages || []).map(stage => {
+          const colorClass = stageColors[stage]?.replace('badge-', 'border-') || 'border-gray-200';
+          return (
+            <div key={stage} className={`glass-card p-3 border-t-4 ${colorClass}`}>
+              <p className="text-[9px] font-bold text-gray-500 tracking-widest uppercase">{stage.replace('_', ' ')}</p>
+              <p className="text-xl font-black text-gray-900 mt-1">{ordersByStage[stage]?.length || 0}</p>
+            </div>
+          );
+        })}
       </div>
 
       <div className="flex gap-1 bg-gray-100 p-1 rounded-lg w-fit">
@@ -1042,6 +1120,19 @@ export default function Production() {
                   </select>
                 </div>
               </div>
+              <div>
+                <label className="block text-sm font-semibold text-gray-700 mb-1">Tipo de Producto</label>
+                <div className="flex gap-4">
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="product_type" value="H" checked={orderProductType === 'H'} onChange={(e) => setOrderProductType(e.target.value)} className="w-4 h-4 text-primary-600 focus:ring-primary-500" />
+                    <span className="text-sm font-medium">Homeopatía (H)</span>
+                  </label>
+                  <label className="flex items-center gap-2 cursor-pointer">
+                    <input type="radio" name="product_type" value="A" checked={orderProductType === 'A'} onChange={(e) => setOrderProductType(e.target.value)} className="w-4 h-4 text-primary-600 focus:ring-primary-500" />
+                    <span className="text-sm font-medium">Alimento (A)</span>
+                  </label>
+                </div>
+              </div>
               {selectedRecipe && (() => {
                 const recipe = (recipes || []).find(r => r?.id === selectedRecipe);
                 return (recipe?.ingredients || []).length > 0 && (
@@ -1136,20 +1227,44 @@ export default function Production() {
                     required 
                   />
                 </div>
-                <div className="col-span-2">
+                <div className="col-span-1">
                   <label className="block text-sm font-semibold mb-1">Imagen del Producto / Receta</label>
                   <div className="flex items-center gap-3 p-2 border border-dashed border-gray-300 rounded-lg bg-gray-50">
                     <input type="file" accept="image/*" onChange={handleRecipeFileChange} className="hidden" id="recipe-image-upload" />
                     <label htmlFor="recipe-image-upload" className="btn-secondary text-xs cursor-pointer py-1.5 px-3">
-                      {selectedRecipeFile ? 'Cambiar Imagen' : 'Seleccionar Archivo'}
+                      {selectedRecipeFile ? 'Cambiar' : 'Subir'}
                     </label>
-                    {selectedRecipeFile ? (
-                      <span className="text-xs text-gray-600 truncate flex-1">{selectedRecipeFile.name}</span>
-                    ) : (
-                      <span className="text-xs text-gray-400 flex-1">{recipeForm.image_url ? 'Imagen actual cargada' : 'No hay archivo seleccionado'}</span>
-                    )}
-                    {uploading && <div className="animate-spin rounded-full h-4 w-4 border-b-2 border-primary-600"></div>}
+                    <span className="text-xs text-gray-400 flex-1 truncate">{selectedRecipeFile ? selectedRecipeFile.name : (recipeForm.image_url ? 'Cargada' : 'No hay archivo')}</span>
                   </div>
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-semibold mb-1">Foto de Etiqueta</label>
+                  <div className="flex items-center gap-3 p-2 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                    <input type="file" accept="image/*" onChange={handleLabelFileChange} className="hidden" id="label-image-upload" />
+                    <label htmlFor="label-image-upload" className="btn-secondary text-xs cursor-pointer py-1.5 px-3">
+                      {selectedLabelFile ? 'Cambiar' : 'Subir'}
+                    </label>
+                    <span className="text-xs text-gray-400 flex-1 truncate">{selectedLabelFile ? selectedLabelFile.name : (recipeForm.label_image_url ? 'Cargada' : 'No hay archivo')}</span>
+                  </div>
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-semibold mb-1">Foto de Caja</label>
+                  <div className="flex items-center gap-3 p-2 border border-dashed border-gray-300 rounded-lg bg-gray-50">
+                    <input type="file" accept="image/*" onChange={handleBoxFileChange} className="hidden" id="box-image-upload" />
+                    <label htmlFor="box-image-upload" className="btn-secondary text-xs cursor-pointer py-1.5 px-3">
+                      {selectedBoxFile ? 'Cambiar' : 'Subir'}
+                    </label>
+                    <span className="text-xs text-gray-400 flex-1 truncate">{selectedBoxFile ? selectedBoxFile.name : (recipeForm.box_image_url ? 'Cargada' : 'No hay archivo')}</span>
+                  </div>
+                </div>
+                <div className="col-span-1">
+                  <label className="block text-sm font-semibold mb-1">Código Interno</label>
+                  <input 
+                    className="w-full p-2 border border-gray-200 rounded-lg"
+                    value={recipeForm.internal_coding} 
+                    onChange={(e) => setRecipeForm({ ...recipeForm, internal_coding: e.target.value })} 
+                    placeholder="Ej: COD-INT-001" 
+                  />
                 </div>
                 <div className="col-span-2">
                   <label className="block text-sm font-semibold mb-1">Descripción</label>

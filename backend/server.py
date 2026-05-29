@@ -367,6 +367,9 @@ class Recipe(BaseModel):
     output_product_name: str
     expected_quantity: int
     image_url: Optional[str] = None
+    label_image_url: Optional[str] = None
+    box_image_url: Optional[str] = None
+    internal_coding: Optional[str] = None
     ingredients: List[RecipeIngredient] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
@@ -377,6 +380,9 @@ class RecipeCreate(BaseModel):
     output_product_name: str
     expected_quantity: int
     image_url: Optional[str] = None
+    label_image_url: Optional[str] = None
+    box_image_url: Optional[str] = None
+    internal_coding: Optional[str] = None
     ingredients: List[RecipeIngredient]
 
 class RawMaterial(BaseModel):
@@ -469,8 +475,23 @@ class ProductionOrder(BaseModel):
     warehouse_id: Optional[str] = None
     start_time: Optional[str] = None
     end_time: Optional[str] = None
+    lote: Optional[str] = None
+    vencimiento: Optional[str] = None
+    product_type: Optional[str] = None # H or A
     checklist_alistamiento: List[dict] = Field(default_factory=list) # [{material_id, name, checked}]
     checklist_procesamiento: List[dict] = Field(default_factory=list) # [{task, checked}]
+    
+    # Formularios de etapas
+    form_despeje_alistamiento: Optional[dict] = None
+    form_pesaje_firma: Optional[dict] = None
+    form_despeje_fabricacion: Optional[dict] = None
+    form_desinfeccion: Optional[dict] = None
+    form_agua: Optional[dict] = None
+    form_higiene: Optional[dict] = None
+    form_tiempos_mezclado: Optional[dict] = None
+    form_peso_volumen: Optional[dict] = None
+    form_recepcion_bodega: Optional[dict] = None
+
     responsable_alistamiento: Optional[str] = None
     responsable_procesamiento: Optional[str] = None
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -481,6 +502,7 @@ class ProductionOrderCreate(BaseModel):
     recipe_name: str
     quantity: int = 1
     warehouse_id: Optional[str] = None
+    product_type: str = "H" # H for Homeopatia, A for Alimento
     start_time: Optional[str] = None
 
 class ProductionOrderUpdate(BaseModel):
@@ -500,6 +522,17 @@ class ProductionOrderAdvance(BaseModel):
     responsable_procesamiento: Optional[str] = None
     novedades: Optional[str] = None
     actual_output: Optional[int] = None
+
+    # Step submissions
+    form_despeje_alistamiento: Optional[dict] = None
+    form_pesaje_firma: Optional[dict] = None
+    form_despeje_fabricacion: Optional[dict] = None
+    form_desinfeccion: Optional[dict] = None
+    form_agua: Optional[dict] = None
+    form_higiene: Optional[dict] = None
+    form_tiempos_mezclado: Optional[dict] = None
+    form_peso_volumen: Optional[dict] = None
+    form_recepcion_bodega: Optional[dict] = None
 
 class CashShift(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1499,9 +1532,36 @@ async def create_production_order(order_data: ProductionOrderCreate, current_use
                 "checked": False
             })
     
+    # Calculate vencimiento (1.5 years = 18 months)
+    now = datetime.now(timezone.utc)
+    target_month = now.month + 18
+    target_year = now.year + (target_month - 1) // 12
+    target_month = (target_month - 1) % 12 + 1
+    # Handle day overflow (e.g. 31st of month to month with 30 days)
+    target_day = now.day
+    import calendar
+    max_day = calendar.monthrange(target_year, target_month)[1]
+    if target_day > max_day:
+        target_day = max_day
+    vencimiento_date = now.replace(year=target_year, month=target_month, day=target_day)
+    vencimiento_str = vencimiento_date.strftime("%Y-%m-%d")
+
+    # Generate sequential lot for the month
+    start_of_month = now.replace(day=1, hour=0, minute=0, second=0, microsecond=0).isoformat()
+    count_month = await database.production_orders.count_documents({
+        "company_id": current_user["company_id"],
+        "created_at": {"$gte": start_of_month}
+    })
+    consecutivo = str(count_month + 1).zfill(3)
+    mes = str(now.month).zfill(2)
+    anio = str(now.year)
+    lote_str = f"{consecutivo}{mes}{anio}{order_data.product_type}"
+
     new_order = ProductionOrder(
         company_id=current_user["company_id"],
         order_number=order_number,
+        lote=lote_str,
+        vencimiento=vencimiento_str,
         created_by=current_user["email"],
         checklist_alistamiento=checklist_alistamiento,
         **order_data.model_dump()
@@ -1559,6 +1619,17 @@ async def advance_production_order(order_id: str, data: ProductionOrderAdvance, 
         update_fields["novedades"] = data.novedades
     if data.actual_output is not None:
         update_fields["actual_output"] = data.actual_output
+        
+    # Form data
+    if data.form_despeje_alistamiento: update_fields["form_despeje_alistamiento"] = data.form_despeje_alistamiento
+    if data.form_pesaje_firma: update_fields["form_pesaje_firma"] = data.form_pesaje_firma
+    if data.form_despeje_fabricacion: update_fields["form_despeje_fabricacion"] = data.form_despeje_fabricacion
+    if data.form_desinfeccion: update_fields["form_desinfeccion"] = data.form_desinfeccion
+    if data.form_agua: update_fields["form_agua"] = data.form_agua
+    if data.form_higiene: update_fields["form_higiene"] = data.form_higiene
+    if data.form_tiempos_mezclado: update_fields["form_tiempos_mezclado"] = data.form_tiempos_mezclado
+    if data.form_peso_volumen: update_fields["form_peso_volumen"] = data.form_peso_volumen
+    if data.form_recepcion_bodega: update_fields["form_recepcion_bodega"] = data.form_recepcion_bodega
     
     if data.next_stage == 'terminada':
         update_fields["end_time"] = datetime.now(timezone.utc).isoformat()
@@ -2048,12 +2119,12 @@ async def delete_employee(employee_id: str, current_user: dict = Depends(get_cur
 # ==================== ADDITIONAL FILE UPLOADS ====================
 
 @api_router.post("/upload/recipe-image/{recipe_id}")
-async def upload_recipe_image(recipe_id: str, file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
+async def upload_recipe_image(recipe_id: str, image_type: str = "main", file: UploadFile = File(...), current_user: dict = Depends(get_current_user)):
     if not file.content_type.startswith("image/"):
         raise HTTPException(status_code=400, detail="File must be an image")
     
     ext = file.filename.split(".")[-1] if "." in file.filename else "jpg"
-    filename = f"recipe_{recipe_id}_{uuid.uuid4().hex[:8]}.{ext}"
+    filename = f"recipe_{image_type}_{recipe_id}_{uuid.uuid4().hex[:8]}.{ext}"
     filepath = UPLOADS_DIR / filename
     
     async with aiofiles.open(filepath, 'wb') as f:
@@ -2062,9 +2133,17 @@ async def upload_recipe_image(recipe_id: str, file: UploadFile = File(...), curr
     
     database = get_db()
     image_url = f"/uploads/{filename}"
+    
+    field_map = {
+        "main": "image_url",
+        "label": "label_image_url",
+        "box": "box_image_url"
+    }
+    field_to_update = field_map.get(image_type, "image_url")
+    
     await database.recipes.update_one(
         {"id": recipe_id, "company_id": current_user["company_id"]},
-        {"$set": {"image_url": image_url}}
+        {"$set": {field_to_update: image_url}}
     )
     return {"image_url": image_url, "filename": filename}
 
