@@ -35,7 +35,7 @@ export default function Layout() {
           </button>
         </header>
 
-        <div className="flex-1 p-4 md:p-6 overflow-auto animate-fade-in relative scroll-smooth">
+        <div className="flex-1 p-4 md:p-6 overflow-auto relative scroll-smooth">
           <Outlet />
         </div>
       </main>

@@ -270,7 +270,7 @@ input:focus, select:focus, textarea:focus {
 /* ===== ANIMATIONS ===== */
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(10px); }
-  to { opacity: 1; transform: translateY(0); }
+  to { opacity: 1; transform: none; }
 }
 .animate-fade-in {
   animation: fadeIn 0.35s ease-out forwards;

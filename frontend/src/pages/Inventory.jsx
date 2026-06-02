@@ -425,8 +425,8 @@ export default function Inventory() {
                 <div><label className="block text-sm font-semibold mb-1">Costo Venta</label><input type="number" step="0.01" value={form.cost_sell} onChange={(e) => setForm({ ...form, cost_sell: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-sm font-semibold mb-1">Stock Actual</label><input type="number" value={form.stock_current} onChange={(e) => setForm({ ...form, stock_current: e.target.value })} required /></div>
-                <div><label className="block text-sm font-semibold mb-1">Stock Mínimo</label><input type="number" value={form.stock_min} onChange={(e) => setForm({ ...form, stock_min: e.target.value })} required /></div>
+                <div><label className="block text-sm font-semibold mb-1">Stock Actual</label><input type="number" value={form.stock_current} onChange={(e) => setForm({ ...form, stock_current: e.target.value })} /></div>
+                <div><label className="block text-sm font-semibold mb-1">Stock Mínimo</label><input type="number" value={form.stock_min} onChange={(e) => setForm({ ...form, stock_min: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-sm font-semibold mb-1">Fecha Vencimiento</label><input type="date" value={form.expiry_date} onChange={(e) => setForm({ ...form, expiry_date: e.target.value })} /></div>

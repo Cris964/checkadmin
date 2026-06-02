@@ -1630,8 +1630,8 @@ export default function Production() {
                 <div><label className="block text-sm font-semibold mb-1">SKU</label><input value={materialForm.sku} onChange={(e) => setMaterialForm({ ...materialForm, sku: e.target.value })} required /></div>
               </div>
               <div className="grid grid-cols-3 gap-3">
-                <div><label className="block text-sm font-semibold mb-1">Stock Actual</label><input type="number" value={materialForm.current_stock} onChange={(e) => setMaterialForm({ ...materialForm, current_stock: e.target.value })} required /></div>
-                <div><label className="block text-sm font-semibold mb-1">Stock Mín.</label><input type="number" value={materialForm.min_stock} onChange={(e) => setMaterialForm({ ...materialForm, min_stock: e.target.value })} required /></div>
+                <div><label className="block text-sm font-semibold mb-1">Stock Actual</label><input type="number" value={materialForm.current_stock} onChange={(e) => setMaterialForm({ ...materialForm, current_stock: e.target.value })} /></div>
+                <div><label className="block text-sm font-semibold mb-1">Stock Mín.</label><input type="number" value={materialForm.min_stock} onChange={(e) => setMaterialForm({ ...materialForm, min_stock: e.target.value })} /></div>
                 <div><label className="block text-sm font-semibold mb-1">Unidad</label>
                   <select value={materialForm.unit} onChange={(e) => setMaterialForm({ ...materialForm, unit: e.target.value })}>{['kg','g','L','ml','unidades'].map((u) => <option key={u}>{u}</option>)}</select>
                 </div>
