@@ -1,9 +1,10 @@
 import { useEffect, useState } from 'react';
 import api, { getAssetUrl } from '../lib/api';
 import { toast } from 'sonner';
-import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2, Trash2, Search } from 'lucide-react';
+import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2, Trash2, Search, Printer } from 'lucide-react';
+import OrderPrintView from '../components/OrderPrintView';
 
-const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipes, rawMaterials, advanceOrder, expandedOrder, setExpandedOrder, warehouses, fmt }) => {
+const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipes, rawMaterials, advanceOrder, setAdvancingOrder, expandedOrder, setExpandedOrder, warehouses, fmt, setPrintingOrder }) => {
   const [localChecklist, setLocalChecklist] = useState([]);
   const [responsable, setResponsable] = useState('');
   const [observations, setObservations] = useState('');
@@ -61,8 +62,13 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
         <button onClick={() => setExpandedOrder(isExpanded ? null : o.id)} className={`p-2 rounded-lg transition-colors ${isExpanded ? 'bg-primary-50 text-primary-600' : 'hover:bg-gray-100 text-gray-400'}`}>
           <List size={20} />
         </button>
+
+        <button onClick={() => setPrintingOrder(o)} className={`p-2 rounded-lg transition-colors hover:bg-gray-100 text-gray-400`} title="Imprimir Orden (F-PN-013)">
+          <Printer size={20} />
+        </button>
+
         {nextStage && o.stage === 'montada' && (
-          <button onClick={() => advanceOrder(o.id || o._id, nextStage)} className="btn-primary text-xs px-4 py-2 font-bold uppercase tracking-wider">
+          <button onClick={() => setAdvancingOrder({ order: o, nextStage })} className="btn-primary text-xs px-4 py-2 font-bold uppercase tracking-wider">
             Alimentar <ChevronRight size={14} />
           </button>
         )}
@@ -300,7 +306,7 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
                   <p>{o.end_time ? new Date(o.end_time).toLocaleString('es-CO') : '—'}</p>
                 </div>
               </div>
-            </div>
+
           )}
         </div>
       )}
@@ -325,11 +331,14 @@ export default function Production() {
   const [orderProductType, setOrderProductType] = useState('H');
   const [selectedWarehouse, setSelectedWarehouse] = useState('');
   const [expandedOrder, setExpandedOrder] = useState(null);
+  const [printingOrder, setPrintingOrder] = useState(null);
   const [expandedWarehouse, setExpandedWarehouse] = useState(null);
   const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', purchase_price: '', purchase_quantity: '', purchase_unit_measure: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' });
-  const [recipeForm, setRecipeForm] = useState({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', label_image_url: '', box_image_url: '', internal_coding: '', ingredients: [] });
+  const [recipeForm, setRecipeForm] = useState({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', label_image_url: '', box_image_url: '', internal_coding: '', ingredients: [], packaging_materials: [] });
   const [newIngredient, setNewIngredient] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg', purchase_price: 0, purchase_quantity: 1, purchase_unit: 'kg' });
+  const [newPackaging, setNewPackaging] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'unidades', purchase_price: 0, purchase_quantity: 1, purchase_unit: 'unidades' });
   const [uploading, setUploading] = useState(false);
+  const [advancingOrder, setAdvancingOrder] = useState(null);
   const [selectedRecipeFile, setSelectedRecipeFile] = useState(null);
   const [selectedLabelFile, setSelectedLabelFile] = useState(null);
   const [selectedBoxFile, setSelectedBoxFile] = useState(null);
@@ -479,7 +488,7 @@ export default function Production() {
       setSelectedRecipeFile(null);
       setSelectedLabelFile(null);
       setSelectedBoxFile(null);
-      setRecipeForm({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', label_image_url: '', box_image_url: '', internal_coding: '', ingredients: [] }); 
+      setRecipeForm({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', label_image_url: '', box_image_url: '', internal_coding: '', ingredients: [], packaging_materials: [] }); 
       loadData();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al guardar receta');
@@ -500,7 +509,7 @@ export default function Production() {
       label_image_url: recipe.label_image_url || '',
       box_image_url: recipe.box_image_url || '',
       internal_coding: recipe.internal_coding || '',
-      ingredients: recipe.ingredients || []
+      ingredients: recipe.ingredients || [], packaging_materials: recipe.packaging_materials || []
     });
     setShowRecipeForm(true);
   };
@@ -610,19 +619,19 @@ export default function Production() {
   const handleEditMaterial = (m) => {
     setEditingMaterial(m);
     setMaterialForm({
-      name: m.name,
-      sku: m.sku,
-      current_stock: m.current_stock,
-      min_stock: m.min_stock,
-      unit: m.unit,
-      purchase_price: m.purchase_price || '',
-      purchase_quantity: m.purchase_quantity || '',
-      purchase_unit_measure: m.purchase_unit_measure || m.unit,
-      cost_per_unit: m.cost_per_unit,
-      supplier: m.supplier || '',
-      lote: m.lote || '',
-      vencimiento: m.vencimiento || '',
-      warehouse_id: m.warehouse_id || ''
+      name: m.name ?? '',
+      sku: m.sku ?? '',
+      current_stock: m.current_stock ?? 0,
+      min_stock: m.min_stock ?? 0,
+      unit: m.unit ?? 'kg',
+      purchase_price: m.purchase_price ?? '',
+      purchase_quantity: m.purchase_quantity ?? '',
+      purchase_unit_measure: m.purchase_unit_measure ?? m.unit ?? 'kg',
+      cost_per_unit: m.cost_per_unit ?? 0,
+      supplier: m.supplier ?? '',
+      lote: m.lote ?? '',
+      vencimiento: m.vencimiento ?? '',
+      warehouse_id: m.warehouse_id ?? ''
     });
     setShowMaterialForm(true);
   };
@@ -731,9 +740,10 @@ export default function Production() {
                       getRecipeForOrder={getRecipeForOrder}
                       recipes={recipes}
                       rawMaterials={rawMaterials}
-                      advanceOrder={advanceOrder}
+                      advanceOrder={advanceOrder} setAdvancingOrder={setAdvancingOrder}
                       expandedOrder={expandedOrder}
                       setExpandedOrder={setExpandedOrder}
+                      setPrintingOrder={setPrintingOrder}
                       warehouses={warehouses}
                       fmt={fmt}
                     />
@@ -832,7 +842,7 @@ export default function Production() {
             m && (
               <div key={m.id} className="data-row gap-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                 <Boxes size={22} className="text-primary-400 flex-shrink-0" />
-                <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-8 gap-4 py-3">
+                <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-11 gap-2 py-3">
                   <div className="col-span-1 md:col-span-2">
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Nombre</p>
                     <p className="font-bold text-sm text-gray-800">{m.name}</p>
@@ -843,9 +853,11 @@ export default function Production() {
                     </p>
                   </div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Stock</p><p className={`font-bold text-sm ${m.current_stock <= m.min_stock ? 'text-red-600' : 'text-green-600'}`}>{m.current_stock} {m.unit}</p></div>
+                  <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Precio Compra</p><p className="font-medium text-xs text-gray-700">{fmt(m.purchase_price)}</p></div>
+                  <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Cant. Comprada</p><p className="font-medium text-xs text-gray-700">{m.purchase_quantity || '—'} {m.purchase_unit_measure || m.unit}</p></div>
+                  <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo/U</p><p className="font-bold text-sm text-primary-600">{fmt(m.cost_per_unit)}</p></div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Lote</p><p className="font-medium text-xs text-gray-700">{m.lote || '—'}</p></div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Vence</p><p className="font-medium text-xs text-gray-700">{m.vencimiento || '—'}</p></div>
-                  <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo/U</p><p className="font-bold text-sm text-primary-600">{fmt(m.cost_per_unit)}</p></div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo Total</p><p className="font-bold text-sm text-gray-800">{fmt((m.cost_per_unit || m.purchase_price || 0) * (m.current_stock || 0))}</p></div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Proveedor</p><p className="font-medium text-xs text-gray-600 truncate">{m.supplier || '—'}</p></div>
                   <div className="flex items-center justify-end gap-2 col-span-2 sm:col-span-1 md:col-span-1">
@@ -980,7 +992,7 @@ export default function Production() {
       )}
 
       {showInvoiceForm && (
-        <div className="modal-overlay" onClick={() => setShowInvoiceForm(false)}>
+        <div className="modal-overlay">
           <div className="modal-content max-w-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">Nueva Factura de Compra</h3><button onClick={() => setShowInvoiceForm(false)}><X size={20} /></button></div>
             
@@ -1082,7 +1094,7 @@ export default function Production() {
 
       {/* New Order Modal */}
       {showOrderForm && (
-        <div className="modal-overlay" onClick={() => setShowOrderForm(false)}>
+        <div className="modal-overlay">
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">Nueva Orden de Producción</h3><button onClick={() => setShowOrderForm(false)}><X size={20} /></button></div>
             <div className="space-y-4">
@@ -1166,7 +1178,7 @@ export default function Production() {
 
       {/* New Recipe Modal */}
       {showRecipeForm && (
-        <div className="modal-overlay" onClick={() => setShowRecipeForm(false)}>
+        <div className="modal-overlay">
           <div className="modal-content max-w-lg" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4">
               <h3 className="text-xl font-bold">{editingRecipe ? 'Editar Receta/Kit' : 'Nueva Receta/Kit'}</h3>
@@ -1410,6 +1422,143 @@ export default function Production() {
 
                   <button type="button" onClick={addIngredient} className="btn-primary p-2 whitespace-nowrap"><Plus size={16} className="inline mr-1"/> Añadir</button>
                 </div>
+              </div>
+
+                {/* EMPAQUE */}
+                <div className="border-t pt-3">
+                <p className="text-sm font-semibold mb-2">Materiales de Empaque ({recipeForm.packaging_materials.length})</p>
+                <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
+                  {(recipeForm.packaging_materials || []).map((ing, i) => {
+                    const cpu = (ing.purchase_price || 0) / (ing.purchase_quantity || 1);
+                    return (
+                      <div key={i} className="p-3 bg-gray-50 rounded-lg border border-gray-100">
+                        <div className="flex justify-between items-start mb-2">
+                          <p className="text-sm font-bold text-gray-800">{ing.raw_material_name}</p>
+                          <button 
+                            type="button" 
+                            onClick={() => {
+                              const newIngs = [...recipeForm.packaging_materials];
+                              newIngs.splice(i, 1);
+                              setRecipeForm({ ...recipeForm, packaging_materials: newIngs });
+                            }}
+                            className="p-1 text-red-400 hover:bg-red-50 rounded"
+                          >
+                            <Trash2 size={16} />
+                          </button>
+                        </div>
+                        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Precio Compra</label>
+                            <input 
+                              type="number" 
+                              className="w-full p-1.5 text-xs border rounded bg-white"
+                              value={ing.purchase_price}
+                              onChange={(e) => {
+                                const newIngs = [...recipeForm.packaging_materials];
+                                newIngs[i].purchase_price = parseFloat(e.target.value) || 0;
+                                setRecipeForm({ ...recipeForm, packaging_materials: newIngs });
+                              }}
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Cant. Compra</label>
+                            <div className="flex">
+                              <input 
+                                type="number" 
+                                className="w-full p-1.5 text-xs border rounded-l bg-white"
+                                value={ing.purchase_quantity}
+                                onChange={(e) => {
+                                  const newIngs = [...recipeForm.packaging_materials];
+                                  newIngs[i].purchase_quantity = parseFloat(e.target.value) || 1;
+                                  setRecipeForm({ ...recipeForm, packaging_materials: newIngs });
+                                }}
+                              />
+                              <span className="bg-gray-200 border border-l-0 text-[10px] px-2 flex items-center rounded-r text-gray-600">{ing.purchase_unit || 'u'}</span>
+                            </div>
+                          </div>
+                          <div>
+                            <label className="block text-[10px] font-bold text-gray-500 uppercase">Cant. Receta</label>
+                            <div className="flex">
+                              <input 
+                                type="number" 
+                                className="w-full p-1.5 text-xs border rounded-l bg-white"
+                                value={ing.quantity}
+                                onChange={(e) => {
+                                  const newIngs = [...recipeForm.packaging_materials];
+                                  newIngs[i].quantity = parseFloat(e.target.value) || 0;
+                                  setRecipeForm({ ...recipeForm, packaging_materials: newIngs });
+                                }}
+                              />
+                              <span className="bg-gray-200 border border-l-0 text-[10px] px-2 flex items-center rounded-r text-gray-600">{ing.unit}</span>
+                            </div>
+                          </div>
+                          <div className="bg-primary-50 rounded border border-primary-100 p-1.5 flex flex-col justify-center">
+                            <label className="block text-[9px] font-bold text-primary-600 uppercase">Costo en Receta</label>
+                            <p className="font-bold text-sm text-primary-700">
+                              {(() => {
+                                const mat = (rawMaterials || []).find(m => m.id === ing.raw_material_id);
+                                const fallbackCpu = mat?.cost_per_unit || 0;
+                                const baseCpu = ing.purchase_price ? (ing.purchase_price / (ing.purchase_quantity || 1)) : fallbackCpu;
+                                const factor = getConversionFactor(ing.purchase_unit || mat?.unit, ing.unit);
+                                const cpu = baseCpu / factor;
+                                return fmt(ing.quantity * cpu);
+                              })()}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+                
+                <div className="flex flex-col sm:flex-row gap-2 mt-4 p-3 bg-white border border-gray-200 rounded-lg items-center">
+                  <select 
+                    value={newPackaging.raw_material_id} 
+                    onChange={(e) => { 
+                      const m = (rawMaterials || []).find((x) => x?.id === e.target.value); 
+                      setNewIngredient({ 
+                        ...newPackaging, 
+                        raw_material_id: e.target.value, 
+                        raw_material_name: m?.name || '', 
+                        unit: m?.unit || 'kg',
+                        purchase_price: m?.purchase_price || m?.cost_per_unit || 0,
+                        purchase_quantity: m?.purchase_quantity || 1,
+                        purchase_unit: m?.purchase_unit_measure || m?.unit || 'kg'
+                      }); 
+                    }} 
+                    className="flex-1 text-sm p-2 border rounded min-w-[150px]"
+                  >
+                    <option value="">Añadir empaque...</option>
+                    {(rawMaterials || []).map((m) => <option key={m?.id} value={m?.id}>{m?.name}</option>)}
+                  </select>
+                  
+                  <div className="flex items-center gap-1">
+                    <input type="number" placeholder="Cant." value={newPackaging.quantity} onChange={(e) => setNewIngredient({ ...newPackaging, quantity: e.target.value })} className="w-20 text-sm p-2 border rounded" />
+                    <select value={newPackaging.unit} onChange={(e) => setNewIngredient({ ...newPackaging, unit: e.target.value })} className="text-sm p-2 border rounded bg-gray-50">
+                      <option value="kg">kg</option>
+                      <option value="g">g</option>
+                      <option value="L">L</option>
+                      <option value="ml">ml</option>
+                      <option value="und">und</option>
+                    </select>
+                  </div>
+                  
+                  {newPackaging.raw_material_id && (
+                    <div className="px-3 py-1 bg-gray-50 rounded border border-gray-100 text-right min-w-[100px]">
+                      <span className="block text-[10px] text-gray-400 font-bold uppercase leading-none">Subtotal</span>
+                      <span className="text-sm font-bold text-primary-600">
+                        {(() => {
+                          const baseCpu = newPackaging.purchase_price ? (newPackaging.purchase_price / (newPackaging.purchase_quantity || 1)) : 0;
+                          const factor = getConversionFactor(newPackaging.purchase_unit, newPackaging.unit);
+                          const cpu = baseCpu / factor;
+                          return fmt((parseFloat(newPackaging.quantity) || 0) * cpu);
+                        })()}
+                      </span>
+                    </div>
+                  )}
+
+                  <button type="button" onClick={handleAddPackaging} className="btn-primary p-2 whitespace-nowrap"><Plus size={16} className="inline mr-1"/> Añadir</button>
+                </div>
 
                 {recipeForm.ingredients.length > 0 && (() => {
                   const totalQty = recipeForm.ingredients.reduce((acc, ing) => acc + (parseFloat(ing.quantity) || 0), 0);
@@ -1455,7 +1604,7 @@ export default function Production() {
 
       {/* New Material Modal */}
       {showMaterialForm && (
-        <div className="modal-overlay" onClick={() => setShowMaterialForm(false)}>
+        <div className="modal-overlay">
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">{editingMaterial ? 'Editar Materia Prima' : 'Nueva Materia Prima'}</h3><button onClick={() => { setShowMaterialForm(false); setEditingMaterial(null); }}><X size={20} /></button></div>
             <form onSubmit={createMaterial} className="space-y-3">
@@ -1475,12 +1624,12 @@ export default function Production() {
                   const val = parseFloat(e.target.value) || 0;
                   const qty = parseFloat(materialForm.purchase_quantity) || 1;
                   setMaterialForm({ ...materialForm, purchase_price: e.target.value, cost_per_unit: (val / qty).toFixed(2) });
-                }} required /></div>
+                }} /></div>
                 <div><label className="block text-sm font-semibold mb-1">Cant. Compra</label><input type="number" step="0.01" value={materialForm.purchase_quantity} onChange={(e) => {
                   const qty = parseFloat(e.target.value) || 1;
                   const val = parseFloat(materialForm.purchase_price) || 0;
                   setMaterialForm({ ...materialForm, purchase_quantity: e.target.value, cost_per_unit: (val / qty).toFixed(2) });
-                }} required /></div>
+                }} /></div>
                 <div><label className="block text-sm font-semibold mb-1">Unidad Compra</label>
                   <select value={materialForm.purchase_unit_measure} onChange={(e) => setMaterialForm({ ...materialForm, purchase_unit_measure: e.target.value })}>{['kg','g','L','ml','unidades'].map((u) => <option key={u}>{u}</option>)}</select>
                 </div>
@@ -1525,6 +1674,28 @@ export default function Production() {
             </form>
           </div>
         </div>
+      )}
+    
+      {advancingOrder && (
+        <AdvanceStageModal 
+          order={advancingOrder.order}
+          currentStage={advancingOrder.order.stage}
+          nextStage={advancingOrder.nextStage}
+          onClose={() => setAdvancingOrder(null)}
+          onAdvance={(orderId, nextStage, data) => {
+            setAdvancingOrder(null);
+            advanceOrder(orderId, nextStage, data);
+          }}
+        />
+      )}
+
+      {printingOrder && (
+        <OrderPrintView 
+          order={printingOrder}
+          recipe={getRecipeForOrder(printingOrder)}
+          rawMaterials={rawMaterials}
+          onClose={() => setPrintingOrder(null)}
+        />
       )}
     </div>
     </>
