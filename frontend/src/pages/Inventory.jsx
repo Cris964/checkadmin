@@ -217,10 +217,10 @@ export default function Inventory() {
         </div>
         {tab === 'products' ? (
           <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
-            <button onClick={handleExport} className="btn-secondary w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2" title="Exportar a Excel">
+            <button onClick={handleExport} className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2" title="Exportar a Excel">
               <Download size={16} /> Exportar
             </button>
-            <button onClick={() => setShowImportModal(true)} className="btn-secondary w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2" title="Importar desde Excel">
+            <button onClick={() => setShowImportModal(true)} className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2" title="Importar desde Excel">
               <Upload size={16} /> Carga Masiva (Excel)
             </button>
             <button onClick={() => { setEditingProduct(null); setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '', category: '', has_iva: false }); setShowForm(true); }} className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2">
