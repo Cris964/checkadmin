@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import api, { getAssetUrl } from '../lib/api';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Package, MapPin, X, Maximize2, ChevronDown, ChevronUp, Download, Upload, Search, Eye, FileText } from 'lucide-react';
@@ -408,7 +409,7 @@ export default function Inventory() {
       )}
 
       {/* Product Form Modal */}
-      {showForm && (
+      {showForm && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
@@ -470,10 +471,10 @@ export default function Inventory() {
             </form>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Warehouse Form Modal */}
-      {showWarehouseForm && (
+      {showWarehouseForm && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
@@ -488,10 +489,10 @@ export default function Inventory() {
             </form>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Manage Warehouse Products Modal */}
-      {managingWarehouse && (
+      {managingWarehouse && createPortal(
         <div className="modal-overlay">
           <div className="modal-content max-w-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
@@ -544,9 +545,9 @@ export default function Inventory() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
       {/* Import Modal */}
-      {showImportModal && (
+      {showImportModal && createPortal(
         <div className="modal-overlay">
           <div className="modal-content max-w-md" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
@@ -597,9 +598,9 @@ export default function Inventory() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
       {/* Lightbox Modal */}
-      {lightboxImage && (
+      {lightboxImage && createPortal(
         <div className="modal-overlay z-[100]">
           <div className="relative max-w-4xl w-full p-4" onClick={(e) => e.stopPropagation()}>
             <button 
@@ -615,7 +616,7 @@ export default function Inventory() {
             />
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }

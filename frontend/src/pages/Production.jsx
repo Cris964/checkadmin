@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import api, { getAssetUrl } from '../lib/api';
 import { toast } from 'sonner';
 import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2, Trash2, Search, Printer } from 'lucide-react';
@@ -1008,7 +1009,7 @@ export default function Production() {
         </div>
       )}
 
-      {showInvoiceForm && (
+      {showInvoiceForm && createPortal(
         <div className="modal-overlay">
           <div className="modal-content max-w-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">Nueva Factura de Compra</h3><button onClick={() => setShowInvoiceForm(false)}><X size={20} /></button></div>
@@ -1107,10 +1108,10 @@ export default function Production() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* New Order Modal */}
-      {showOrderForm && (
+      {showOrderForm && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">Nueva Orden de Producción</h3><button onClick={() => setShowOrderForm(false)}><X size={20} /></button></div>
@@ -1191,10 +1192,10 @@ export default function Production() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* New Recipe Modal */}
-      {showRecipeForm && (
+      {showRecipeForm && createPortal(
         <div className="modal-overlay">
           <div className="modal-content max-w-lg" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4">
@@ -1617,10 +1618,10 @@ export default function Production() {
             </form>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* New Material Modal */}
-      {showMaterialForm && (
+      {showMaterialForm && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">{editingMaterial ? 'Editar Materia Prima' : 'Nueva Materia Prima'}</h3><button onClick={() => { setShowMaterialForm(false); setEditingMaterial(null); }}><X size={20} /></button></div>
@@ -1691,7 +1692,7 @@ export default function Production() {
             </form>
           </div>
         </div>
-      )}
+      , document.body)}
     
       {advancingOrder && (
         <AdvanceStageModal 
