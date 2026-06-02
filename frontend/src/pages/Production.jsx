@@ -344,6 +344,7 @@ export default function Production() {
   const [selectedBoxFile, setSelectedBoxFile] = useState(null);
   const [selectedMaterialFile, setSelectedMaterialFile] = useState(null);
   const [searchMaterials, setSearchMaterials] = useState('');
+  const [filterWarehouse, setFilterWarehouse] = useState('');
   const [searchRecipes, setSearchRecipes] = useState('');
   const [purchaseInvoices, setPurchaseInvoices] = useState([]);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
@@ -627,7 +628,7 @@ export default function Production() {
       purchase_price: m.purchase_price ?? '',
       purchase_quantity: m.purchase_quantity ?? '',
       purchase_unit_measure: m.purchase_unit_measure ?? m.unit ?? 'kg',
-      cost_per_unit: m.cost_per_unit ?? 0,
+      cost_per_unit: m.cost_per_unit ?? '',
       supplier: m.supplier ?? '',
       lote: m.lote ?? '',
       vencimiento: m.vencimiento ?? '',
@@ -649,6 +650,7 @@ export default function Production() {
   const stageIdx = (stage) => stages.indexOf(stage);
 
   const getRecipeForOrder = (order) => (recipes || []).find(r => r?.id === order?.recipe_id);
+  const getWarehouseName = (id) => (warehouses || []).find(w => w.id === id)?.name || '';
   const fmt = (n) => `$${Math.round(n || 0).toLocaleString('es-CO')}`;
 
   const getConversionFactor = (fromU, toU) => {
@@ -828,19 +830,34 @@ export default function Production() {
       )}
 
       {tab === 'materials' && (
-        <div className="mb-4">
-          <div className="relative">
+        <div className="mb-4 p-4 pb-0 flex flex-col sm:flex-row gap-3">
+          <div className="relative flex-1">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-            <input type="text" placeholder="Buscar materia prima..." value={searchMaterials} onChange={e => setSearchMaterials(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-300" />
+            <input type="text" placeholder="Buscar materia prima..." value={searchMaterials} onChange={e => setSearchMaterials(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-300"/>
           </div>
+          <select 
+            className="w-full sm:w-64 p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-300"
+            value={filterWarehouse}
+            onChange={(e) => setFilterWarehouse(e.target.value)}
+          >
+            <option value="">Todas las bodegas</option>
+            <option value="none">Sin asignar</option>
+            {warehouses.map(w => <option key={w?.id} value={w?.id}>{w?.name}</option>)}
+          </select>
         </div>
       )}
 
       {tab === 'materials' && (
         <div className="glass-card overflow-hidden">
-          {(rawMaterials || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas</p> : (rawMaterials || []).filter(m => { if (showLowStockOnly && m.current_stock >= m.min_stock) return false; const q = searchMaterials.toLowerCase(); return !q || m.name?.toLowerCase().includes(q) || m.sku?.toLowerCase().includes(q) || m.supplier?.toLowerCase().includes(q); }).map((m) => (
-            m && (
-              <div key={m.id} className="data-row gap-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
+          {(rawMaterials || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas</p> : (
+            <div className="overflow-x-auto">
+                {rawMaterials.filter(m => { 
+                  const q = searchMaterials.toLowerCase(); 
+                  const matchesSearch = !q || m.name?.toLowerCase().includes(q) || m.sku?.toLowerCase().includes(q) || getWarehouseName(m.warehouse_id)?.toLowerCase().includes(q); 
+                  const matchesWarehouse = !filterWarehouse ? true : (filterWarehouse === 'none' ? !m.warehouse_id : m.warehouse_id === filterWarehouse);
+                  return matchesSearch && matchesWarehouse;
+                }).map((m) => (
+                  <div key={m.id} className="data-row gap-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                 <Boxes size={22} className="text-primary-400 flex-shrink-0" />
                 <div className="flex-1 grid grid-cols-2 sm:grid-cols-3 md:grid-cols-11 gap-2 py-3">
                   <div className="col-span-1 md:col-span-2">
@@ -1635,7 +1652,7 @@ export default function Production() {
                 </div>
               </div>
               <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-sm font-semibold mb-1">Costo/U (Automático)</label><input type="number" step="0.01" value={materialForm.cost_per_unit} onChange={(e) => setMaterialForm({ ...materialForm, cost_per_unit: e.target.value })} required readOnly className="bg-gray-100 cursor-not-allowed text-gray-600 font-bold" /></div>
+                <div><label className="block text-sm font-semibold mb-1">Costo/U (Automático)</label><input type="number" step="0.01" value={materialForm.cost_per_unit} onChange={(e) => setMaterialForm({ ...materialForm, cost_per_unit: e.target.value })} readOnly className="bg-gray-100 cursor-not-allowed text-gray-600 font-bold" /></div>
                 <div><label className="block text-sm font-semibold mb-1">Proveedor</label><input value={materialForm.supplier} onChange={(e) => setMaterialForm({ ...materialForm, supplier: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3 pb-2">

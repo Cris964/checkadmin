@@ -371,6 +371,7 @@ class Recipe(BaseModel):
     box_image_url: Optional[str] = None
     internal_coding: Optional[str] = None
     ingredients: List[RecipeIngredient] = Field(default_factory=list)
+    packaging_materials: List[RecipeIngredient] = Field(default_factory=list)
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
 
 class RecipeCreate(BaseModel):
@@ -384,6 +385,7 @@ class RecipeCreate(BaseModel):
     box_image_url: Optional[str] = None
     internal_coding: Optional[str] = None
     ingredients: List[RecipeIngredient]
+    packaging_materials: List[RecipeIngredient] = Field(default_factory=list)
 
 class RawMaterial(BaseModel):
     model_config = ConfigDict(extra="ignore")
@@ -1531,6 +1533,12 @@ async def create_production_order(order_data: ProductionOrderCreate, current_use
                 "name": ing.get('raw_material_name'),
                 "checked": False
             })
+        for pkg in recipe.get('packaging_materials', []):
+            checklist_alistamiento.append({
+                "material_id": pkg.get('raw_material_id'),
+                "name": pkg.get('raw_material_name'),
+                "checked": False
+            })
     
     # Calculate vencimiento (1.5 years = 18 months)
     now = datetime.now(timezone.utc)
@@ -1552,10 +1560,10 @@ async def create_production_order(order_data: ProductionOrderCreate, current_use
         "company_id": current_user["company_id"],
         "created_at": {"$gte": start_of_month}
     })
-    consecutivo = str(count_month + 1).zfill(3)
+    consecutivo = str(count_month + 1).zfill(2)
     mes = str(now.month).zfill(2)
     anio = str(now.year)
-    lote_str = f"{consecutivo}{mes}{anio}{order_data.product_type}"
+    lote_str = f"{order_data.product_type}{consecutivo}{mes}{anio}"
 
     new_order = ProductionOrder(
         company_id=current_user["company_id"],
@@ -1642,6 +1650,14 @@ async def advance_production_order(order_id: str, data: ProductionOrderAdvance, 
                 qty = (ing['quantity'] * order.get('quantity', 1)) / (recipe.get('expected_quantity') or 1)
                 await database.raw_materials.update_one(
                     {"id": ing['raw_material_id'], "company_id": current_user["company_id"]},
+                    {"$inc": {"current_stock": -qty}}
+                )
+            
+            # 1.5 Subtract Packaging Materials
+            for pkg in recipe.get('packaging_materials', []):
+                qty = (pkg['quantity'] * order.get('quantity', 1)) / (recipe.get('expected_quantity') or 1)
+                await database.raw_materials.update_one(
+                    {"id": pkg['raw_material_id'], "company_id": current_user["company_id"]},
                     {"$inc": {"current_stock": -qty}}
                 )
             
