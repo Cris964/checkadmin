@@ -30,6 +30,7 @@ export default function SalesTPV() {
   const [paymentDetails, setPaymentDetails] = useState({ type: 'debito', franchise: '', bank: '', voucher_number: '' });
   const [salesHistory, setSalesHistory] = useState([]);
   const [historyFilters, setHistoryFilters] = useState({ start_date: '', end_date: '', user_id: '' });
+  const [historyGrouping, setHistoryGrouping] = useState('none');
   const [users, setUsers] = useState([]);
   const [editingVoucher, setEditingVoucher] = useState(null);
 
@@ -280,6 +281,50 @@ export default function SalesTPV() {
   );
 
   const fmt = (n) => `$${(n || 0).toLocaleString('es-CO')}`;
+
+  const getGroupedHistory = () => {
+    if (historyGrouping === 'none') return salesHistory;
+    
+    const groups = {};
+    salesHistory.forEach(s => {
+      const date = new Date(s.created_at);
+      let key = '';
+      if (historyGrouping === 'daily') {
+        key = date.toLocaleDateString('es-CO');
+      } else if (historyGrouping === 'weekly') {
+        // Obtenemos el inicio de la semana (Lunes)
+        const d = new Date(date);
+        const day = d.getDay();
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(d.setDate(diff));
+        key = `Semana ${monday.toLocaleDateString('es-CO')}`;
+      } else if (historyGrouping === 'monthly') {
+        const monthNames = ["Enero", "Febrero", "Marzo", "Abril", "Mayo", "Junio", "Julio", "Agosto", "Septiembre", "Octubre", "Noviembre", "Diciembre"];
+        key = `${monthNames[date.getMonth()]} ${date.getFullYear()}`;
+      } else if (historyGrouping === 'yearly') {
+        key = `${date.getFullYear()}`;
+      }
+      
+      if (!groups[key]) {
+        groups[key] = { key, total: 0, count: 0, refunds: 0, itemsCount: 0 };
+      }
+      
+      if (s.status === 'refunded') {
+        groups[key].refunds += s.total;
+      } else {
+        groups[key].total += s.total;
+      }
+      groups[key].count += 1;
+      groups[key].itemsCount += s.items?.length || 0;
+    });
+    
+    return Object.values(groups).sort((a, b) => {
+      // Sort by key descending roughly (might need better logic for weekly, but this works for basic strings)
+      return b.key.localeCompare(a.key);
+    });
+  };
+
+  const groupedSales = getGroupedHistory();
 
   if (loading) return <div className="flex items-center justify-center h-64"><p className="text-gray-500">Cargando...</p></div>;
 
@@ -577,14 +622,14 @@ export default function SalesTPV() {
       {/* Invoice Modal */}
       {mainTab === 'history' && (
         <div className="space-y-4">
-          <div className="glass-card p-4 grid grid-cols-1 sm:grid-cols-4 gap-4 items-end">
+          <div className="glass-card p-4 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 items-end">
             <div>
               <label className="block text-xs font-bold text-gray-400 mb-1">DESDE</label>
-              <input type="date" value={historyFilters.start_date} onChange={(e) => setHistoryFilters({...historyFilters, start_date: e.target.value})} className="text-sm" />
+              <input type="date" value={historyFilters.start_date} onChange={(e) => setHistoryFilters({...historyFilters, start_date: e.target.value})} className="text-sm w-full" />
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-400 mb-1">HASTA</label>
-              <input type="date" value={historyFilters.end_date} onChange={(e) => setHistoryFilters({...historyFilters, end_date: e.target.value})} className="text-sm" />
+              <input type="date" value={historyFilters.end_date} onChange={(e) => setHistoryFilters({...historyFilters, end_date: e.target.value})} className="text-sm w-full" />
             </div>
             <div>
               <label className="block text-xs font-bold text-gray-400 mb-1">VENDEDOR</label>
@@ -593,10 +638,22 @@ export default function SalesTPV() {
                 {users.map(u => <option key={u.id} value={u.id}>{u.name}</option>)}
               </select>
             </div>
-            <button onClick={() => setHistoryFilters({start_date: '', end_date: '', user_id: ''})} className="btn-outline py-2">Limpiar</button>
+            <div>
+              <label className="block text-xs font-bold text-gray-400 mb-1">AGRUPAR POR</label>
+              <select value={historyGrouping} onChange={(e) => setHistoryGrouping(e.target.value)} className="text-sm w-full">
+                <option value="none">Individual</option>
+                <option value="daily">Diario</option>
+                <option value="weekly">Semanal</option>
+                <option value="monthly">Mensual</option>
+                <option value="yearly">Anual</option>
+              </select>
+            </div>
+            <button onClick={() => {setHistoryFilters({start_date: '', end_date: '', user_id: ''}); setHistoryGrouping('none');}} className="btn-outline py-2 w-full">Limpiar</button>
           </div>
           <div className="glass-card overflow-hidden">
-            {salesHistory.length === 0 ? <p className="text-gray-400 text-center py-12">No hay ventas en este periodo</p> : salesHistory.map((s) => (
+            {groupedSales.length === 0 ? <p className="text-gray-400 text-center py-12">No hay ventas en este periodo</p> : 
+             historyGrouping === 'none' ? 
+               groupedSales.map((s) => (
               <div key={s.id} className="p-4 border-b border-gray-100 hover:bg-gray-50 transition-colors">
                 <div className="flex items-center justify-between">
                   <div>
@@ -620,7 +677,7 @@ export default function SalesTPV() {
                               }
                               setEditingVoucher(null);
                             }}
-                            className="inline-block w-24 px-1 py-0 h-5"
+                            className="inline-block w-24 px-1 py-0 h-5 border rounded"
                           />
                         ) : (
                           <span onClick={() => setEditingVoucher({id: s.id, value: s.payment_details.voucher_number})} className="underline cursor-pointer">{s.payment_details.voucher_number || 'N/A'}</span>
@@ -628,18 +685,41 @@ export default function SalesTPV() {
                       </p>
                     )}
                   </div>
-                  <div className="text-right">
+                  <div className="text-right flex flex-col items-end gap-1">
                     <p className={`text-lg font-bold ${s.status === 'refunded' ? 'text-red-500 line-through' : 'text-primary-600'}`}>{fmt(s.total)}</p>
-                    <p className="text-xs text-gray-400 mb-2">Items: {s.items?.length || 0}</p>
+                    <p className="text-xs text-gray-400">Items: {s.items?.length || 0}</p>
                     {s.status === 'refunded' ? (
-                      <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-1 rounded">Devuelto</span>
+                      <span className="text-[10px] font-bold bg-red-100 text-red-600 px-2 py-1 rounded w-fit mt-1">Devuelto</span>
                     ) : (
-                      <button onClick={() => refundSale(s)} className="text-[10px] font-bold bg-orange-100 text-orange-600 px-2 py-1 rounded hover:bg-orange-200">Devolver Venta</button>
+                      <button onClick={() => refundSale(s)} className="text-[10px] font-bold bg-orange-100 text-orange-600 px-2 py-1 rounded hover:bg-orange-200 mt-1">Devolver Venta</button>
                     )}
                   </div>
                 </div>
               </div>
-            ))}
+            )) : 
+               groupedSales.map((g, idx) => (
+              <div key={idx} className="p-5 border-b border-gray-100 hover:bg-gray-50 transition-colors">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-3">
+                    <div className="w-10 h-10 rounded-full bg-primary-100 flex items-center justify-center">
+                      <History size={18} className="text-primary-600" />
+                    </div>
+                    <div>
+                      <p className="font-bold text-gray-900 text-lg">{g.key}</p>
+                      <p className="text-sm text-gray-500">{g.count} transacciones realizadas</p>
+                    </div>
+                  </div>
+                  <div className="text-right">
+                    <p className="text-2xl font-black text-primary-600">{fmt(g.total)}</p>
+                    <div className="flex items-center justify-end gap-3 mt-1">
+                      <p className="text-xs font-semibold text-gray-400">Items: {g.itemsCount}</p>
+                      {g.refunds > 0 && <p className="text-xs font-semibold text-red-500 bg-red-50 px-2 py-0.5 rounded">Devoluciones: {fmt(g.refunds)}</p>}
+                    </div>
+                  </div>
+                </div>
+              </div>
+            ))
+            }
           </div>
         </div>
       )}

@@ -208,25 +208,25 @@ export default function Inventory() {
 
   return (
     <div className="space-y-5 animate-fade-in">
-      <div className="flex items-start justify-between">
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-4xl font-bold text-gray-900">Inventario</h1>
           <p className="text-xs tracking-widest text-gray-400 mt-1">GESTIÓN DE PRODUCTOS Y BODEGAS</p>
         </div>
         {tab === 'products' ? (
-          <div className="flex gap-2">
-            <button onClick={handleExport} className="btn-secondary" title="Exportar a Excel">
+          <div className="flex flex-col sm:flex-row flex-wrap gap-2 w-full sm:w-auto">
+            <button onClick={handleExport} className="btn-secondary w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2" title="Exportar a Excel">
               <Download size={16} /> Exportar
             </button>
-            <button onClick={() => setShowImportModal(true)} className="btn-secondary" title="Importar desde Excel">
+            <button onClick={() => setShowImportModal(true)} className="btn-secondary w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2" title="Importar desde Excel">
               <Upload size={16} /> Carga Masiva (Excel)
             </button>
-            <button onClick={() => { setEditingProduct(null); setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '' }); setShowForm(true); }} className="btn-primary">
+            <button onClick={() => { setEditingProduct(null); setForm({ sku: '', name: '', cost_buy: '', cost_sell: '', stock_min: '', stock_current: '', expiry_date: '', warehouse_id: '', category: '', has_iva: false }); setShowForm(true); }} className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2">
               <Plus size={16} /> Nuevo Producto
             </button>
           </div>
         ) : (
-          <button onClick={() => { setEditingWarehouse(null); setWhForm({ name: '', location: '', description: '' }); setShowWarehouseForm(true); }} className="btn-primary">
+          <button onClick={() => { setEditingWarehouse(null); setWhForm({ name: '', location: '', description: '' }); setShowWarehouseForm(true); }} className="btn-primary w-full sm:w-auto flex items-center justify-center gap-2 px-4 py-2">
             <Plus size={16} /> Nueva Bodega
           </button>
         )}
@@ -394,7 +394,7 @@ export default function Inventory() {
 
       {/* Product Form Modal */}
       {showForm && (
-        <div className="modal-overlay" onClick={() => setShowForm(false)}>
+        <div className="modal-overlay">
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold">{editingProduct ? 'Editar Producto' : 'Nuevo Producto'}</h3>
@@ -459,7 +459,7 @@ export default function Inventory() {
 
       {/* Warehouse Form Modal */}
       {showWarehouseForm && (
-        <div className="modal-overlay" onClick={() => setShowWarehouseForm(false)}>
+        <div className="modal-overlay">
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold">{editingWarehouse ? 'Editar Bodega' : 'Nueva Bodega'}</h3>
@@ -477,7 +477,7 @@ export default function Inventory() {
 
       {/* Manage Warehouse Products Modal */}
       {managingWarehouse && (
-        <div className="modal-overlay" onClick={() => setManagingWarehouse(null)}>
+        <div className="modal-overlay">
           <div className="modal-content max-w-2xl" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <div>
@@ -532,7 +532,7 @@ export default function Inventory() {
       )}
       {/* Import Modal */}
       {showImportModal && (
-        <div className="modal-overlay" onClick={() => setShowImportModal(false)}>
+        <div className="modal-overlay">
           <div className="modal-content max-w-md" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-xl font-bold">Importar Inventario</h3>
@@ -585,7 +585,7 @@ export default function Inventory() {
       )}
       {/* Lightbox Modal */}
       {lightboxImage && (
-        <div className="modal-overlay z-[100]" onClick={() => setLightboxImage(null)}>
+        <div className="modal-overlay z-[100]">
           <div className="relative max-w-4xl w-full p-4" onClick={(e) => e.stopPropagation()}>
             <button 
               onClick={() => setLightboxImage(null)}
