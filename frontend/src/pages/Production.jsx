@@ -1638,23 +1638,8 @@ export default function Production() {
                   <select value={materialForm.unit} onChange={(e) => setMaterialForm({ ...materialForm, unit: e.target.value })}>{['kg','g','L','ml','unidades'].map((u) => <option key={u}>{u}</option>)}</select>
                 </div>
               </div>
-              <div className="grid grid-cols-3 gap-3 pb-2">
-                <div><label className="block text-sm font-semibold mb-1">Precio Compra ($)</label><input type="number" step="0.01" value={materialForm.purchase_price} onChange={(e) => {
-                  const val = parseFloat(e.target.value) || 0;
-                  const qty = parseFloat(materialForm.purchase_quantity) || 1;
-                  setMaterialForm({ ...materialForm, purchase_price: e.target.value, cost_per_unit: (val / qty).toFixed(2) });
-                }} /></div>
-                <div><label className="block text-sm font-semibold mb-1">Cant. Compra</label><input type="number" step="0.01" value={materialForm.purchase_quantity} onChange={(e) => {
-                  const qty = parseFloat(e.target.value) || 1;
-                  const val = parseFloat(materialForm.purchase_price) || 0;
-                  setMaterialForm({ ...materialForm, purchase_quantity: e.target.value, cost_per_unit: (val / qty).toFixed(2) });
-                }} /></div>
-                <div><label className="block text-sm font-semibold mb-1">Unidad Compra</label>
-                  <select value={materialForm.purchase_unit_measure} onChange={(e) => setMaterialForm({ ...materialForm, purchase_unit_measure: e.target.value })}>{['kg','g','L','ml','unidades'].map((u) => <option key={u}>{u}</option>)}</select>
-                </div>
-              </div>
-              <div className="grid grid-cols-2 gap-3">
-                <div><label className="block text-sm font-semibold mb-1">Costo/U (Automático)</label><input type="number" step="0.01" value={materialForm.cost_per_unit} onChange={(e) => setMaterialForm({ ...materialForm, cost_per_unit: e.target.value })} readOnly className="bg-gray-100 cursor-not-allowed text-gray-600 font-bold" /></div>
+              <div className="grid grid-cols-2 gap-3 pb-2">
+                <div><label className="block text-sm font-semibold mb-1">Costo / Precio Unitario ($)</label><input type="number" step="0.01" value={materialForm.cost_per_unit} onChange={(e) => setMaterialForm({ ...materialForm, cost_per_unit: e.target.value, purchase_price: e.target.value, purchase_quantity: 1 })} /></div>
                 <div><label className="block text-sm font-semibold mb-1">Proveedor</label><input value={materialForm.supplier} onChange={(e) => setMaterialForm({ ...materialForm, supplier: e.target.value })} /></div>
               </div>
               <div className="grid grid-cols-2 gap-3 pb-2">
