@@ -886,8 +886,9 @@ export default function Production() {
                   </div>
                 </div>
               </div>
-            )
-          ))}
+            ))}
+            </div>
+          )}
         </div>
       )}
 
