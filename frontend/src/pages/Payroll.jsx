@@ -258,7 +258,7 @@ export default function Payroll() {
       {/* Employee Form */}
       {showForm && (
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
-          <div className="modal-content max-w-lg" onClick={(e) => e.stopPropagation()}>
+          <div className="modal-content max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">Vincular Empleado</h3><button onClick={() => setShowForm(false)}><X size={20} /></button></div>
             <form onSubmit={createEmployee} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">

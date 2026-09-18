@@ -392,6 +392,7 @@ class RawMaterial(BaseModel):
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
     company_id: str
     name: str
+    category: Optional[str] = "Materia Prima"
     sku: str
     current_stock: float
     min_stock: float
@@ -408,6 +409,7 @@ class RawMaterial(BaseModel):
 
 class RawMaterialCreate(BaseModel):
     name: str
+    category: Optional[str] = "Materia Prima"
     sku: str
     current_stock: float
     min_stock: float
@@ -423,6 +425,7 @@ class RawMaterialCreate(BaseModel):
 
 class RawMaterialUpdate(BaseModel):
     name: Optional[str] = None
+    category: Optional[str] = None
     sku: Optional[str] = None
     current_stock: Optional[float] = None
     min_stock: Optional[float] = None

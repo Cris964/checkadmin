@@ -327,6 +327,9 @@ export default function Production() {
   const [editingRecipe, setEditingRecipe] = useState(null);
   const [showMaterialForm, setShowMaterialForm] = useState(false);
   const [editingMaterial, setEditingMaterial] = useState(null);
+  const [showWarehouseForm, setShowWarehouseForm] = useState(false);
+  const [whForm, setWhForm] = useState({ name: '', location: '', description: '' });
+  const [editingWarehouse, setEditingWarehouse] = useState(null);
   const [selectedRecipe, setSelectedRecipe] = useState('');
   const [orderQuantity, setOrderQuantity] = useState(1);
   const [orderProductType, setOrderProductType] = useState('H');
@@ -334,7 +337,7 @@ export default function Production() {
   const [expandedOrder, setExpandedOrder] = useState(null);
   const [printingOrder, setPrintingOrder] = useState(null);
   const [expandedWarehouse, setExpandedWarehouse] = useState(null);
-  const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', purchase_price: '', purchase_quantity: '', purchase_unit_measure: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' });
+  const [materialForm, setMaterialForm] = useState({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', purchase_price: '', purchase_quantity: '', purchase_unit_measure: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '', category: 'Materia Prima' });
   const [recipeForm, setRecipeForm] = useState({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', label_image_url: '', box_image_url: '', internal_coding: '', ingredients: [], packaging_materials: [] });
   const [newIngredient, setNewIngredient] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg', purchase_price: 0, purchase_quantity: 1, purchase_unit: 'kg' });
   const [newPackaging, setNewPackaging] = useState({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'unidades', purchase_price: 0, purchase_quantity: 1, purchase_unit: 'unidades' });
@@ -533,6 +536,25 @@ export default function Production() {
     setNewIngredient({ raw_material_id: '', raw_material_name: '', quantity: '', unit: 'kg', purchase_price: 0, purchase_quantity: 1, purchase_unit: 'kg' });
   };
 
+  const createWarehouse = async (e) => {
+    e.preventDefault();
+    try {
+      if (editingWarehouse) {
+        await api.put(`warehouses/${editingWarehouse.id}`, whForm);
+        toast.success('Bodega actualizada');
+      } else {
+        await api.post('warehouses', whForm);
+        toast.success('Bodega creada');
+      }
+      setShowWarehouseForm(false);
+      setWhForm({ name: '', location: '', description: '' });
+      setEditingWarehouse(null);
+      loadData();
+    } catch (e) {
+      toast.error('Error al guardar bodega');
+    }
+  };
+
   const createMaterial = async (e) => {
     e.preventDefault();
     setUploading(true);
@@ -569,7 +591,7 @@ export default function Production() {
       setShowMaterialForm(false); 
       setEditingMaterial(null);
       setSelectedMaterialFile(null);
-      setMaterialForm({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', purchase_price: '', purchase_quantity: '', purchase_unit_measure: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '' }); 
+      setMaterialForm({ name: '', sku: '', current_stock: '', min_stock: '', unit: 'kg', purchase_price: '', purchase_quantity: '', purchase_unit_measure: 'kg', cost_per_unit: '', supplier: '', lote: '', vencimiento: '', warehouse_id: '', category: 'Materia Prima' }); 
       loadData();
     } catch (err) {
       toast.error(err.response?.data?.detail || 'Error al guardar materia prima');
@@ -622,6 +644,7 @@ export default function Production() {
     setEditingMaterial(m);
     setMaterialForm({
       name: m.name ?? '',
+      category: m.category ?? 'Materia Prima',
       sku: m.sku ?? '',
       current_stock: m.current_stock ?? 0,
       min_stock: m.min_stock ?? 0,
@@ -692,7 +715,11 @@ export default function Production() {
           <p className="text-xs tracking-widest text-gray-400 mt-1">GESTIÓN COMPLETA DE PRODUCCIÓN</p>
         </div>
         {tab === 'orders' && <button onClick={() => setShowOrderForm(true)} className="btn-primary"><Plus size={16} /> Nueva Orden</button>}
-        {tab === 'recipes' && <button onClick={() => setShowRecipeForm(true)} className="btn-primary"><Plus size={16} /> Nueva Receta</button>}
+        {tab === 'recipes' && <button onClick={() => {
+          setEditingRecipe(null);
+          setRecipeForm({ cliente: '', description: '', output_product_id: '', output_product_name: '', expected_quantity: '', image_url: '', label_image_url: '', box_image_url: '', internal_coding: '', ingredients: [], packaging_materials: [] });
+          setShowRecipeForm(true);
+        }} className="btn-primary"><Plus size={16} /> Nueva Receta</button>}
         {tab === 'materials' && (
           <div className="flex gap-2">
             <button onClick={() => setShowInvoiceForm(true)} className="btn-primary text-sm px-3"><Plus size={16} /> Nueva Factura</button>
@@ -893,7 +920,15 @@ export default function Production() {
       )}
 
       {tab === 'warehouses' && (
-        <div className="space-y-4">
+        <div className="space-y-4 mt-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-lg font-bold text-gray-800">Bodegas de Producción</h3>
+            <button onClick={() => {
+              setEditingWarehouse(null);
+              setWhForm({ name: '', location: '', description: '' });
+              setShowWarehouseForm(true);
+            }} className="btn-primary text-sm px-3"><Plus size={16} /> Nueva Bodega</button>
+          </div>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {(warehouses || []).map((w) => {
               const isExpanded = expandedWarehouse === w.id;
@@ -1308,7 +1343,7 @@ export default function Production() {
                 </div>
               </div>
               <div className="border-t pt-3">
-                <p className="text-sm font-semibold mb-2">Ingredientes ({recipeForm.ingredients.length})</p>
+                <p className="text-sm font-semibold mb-2">Ingredientes ({(recipeForm.ingredients || []).length})</p>
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                   {(recipeForm.ingredients || []).map((ing, i) => {
                     const cpu = (ing.purchase_price || 0) / (ing.purchase_quantity || 1);
@@ -1445,7 +1480,7 @@ export default function Production() {
 
                 {/* EMPAQUE */}
                 <div className="border-t pt-3">
-                <p className="text-sm font-semibold mb-2">Materiales de Empaque ({recipeForm.packaging_materials.length})</p>
+                <p className="text-sm font-semibold mb-2">Materiales de Empaque ({(recipeForm.packaging_materials || []).length})</p>
                 <div className="space-y-3 max-h-[400px] overflow-y-auto pr-2">
                   {(recipeForm.packaging_materials || []).map((ing, i) => {
                     const cpu = (ing.purchase_price || 0) / (ing.purchase_quantity || 1);
@@ -1628,7 +1663,18 @@ export default function Production() {
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">{editingMaterial ? 'Editar Materia Prima' : 'Nueva Materia Prima'}</h3><button onClick={() => { setShowMaterialForm(false); setEditingMaterial(null); }}><X size={20} /></button></div>
             <form onSubmit={createMaterial} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-semibold mb-1">Categoría</label>
+                  <select value={materialForm.category || 'Materia Prima'} onChange={(e) => setMaterialForm({ ...materialForm, category: e.target.value })} className="w-full">
+                    <option value="Materia Prima">Materia Prima</option>
+                    <option value="Material de Envase">Material de Envase</option>
+                    <option value="Etiquetas">Etiquetas</option>
+                    <option value="Cajas">Cajas</option>
+                  </select>
+                </div>
                 <div><label className="block text-sm font-semibold mb-1">Nombre</label><input value={materialForm.name} onChange={(e) => setMaterialForm({ ...materialForm, name: e.target.value })} required /></div>
+              </div>
+              <div className="grid grid-cols-2 gap-3">
                 <div><label className="block text-sm font-semibold mb-1">SKU</label><input value={materialForm.sku} onChange={(e) => setMaterialForm({ ...materialForm, sku: e.target.value })} required /></div>
               </div>
               <div className="grid grid-cols-3 gap-3">
@@ -1692,6 +1738,24 @@ export default function Production() {
           }}
         />
       )}
+
+      {/* New Warehouse Modal */}
+      {showWarehouseForm && createPortal(
+        <div className="modal-overlay">
+          <div className="modal-content max-w-sm" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between mb-4">
+              <h3 className="text-xl font-bold">{editingWarehouse ? 'Editar Bodega' : 'Nueva Bodega'}</h3>
+              <button onClick={() => { setShowWarehouseForm(false); setEditingWarehouse(null); }}><X size={20} /></button>
+            </div>
+            <form onSubmit={createWarehouse} className="space-y-3">
+              <div><label className="block text-sm font-semibold mb-1">Nombre</label><input value={whForm.name} onChange={(e) => setWhForm({ ...whForm, name: e.target.value })} required /></div>
+              <div><label className="block text-sm font-semibold mb-1">Ubicación</label><input value={whForm.location} onChange={(e) => setWhForm({ ...whForm, location: e.target.value })} required /></div>
+              <div><label className="block text-sm font-semibold mb-1">Descripción</label><textarea value={whForm.description} onChange={(e) => setWhForm({ ...whForm, description: e.target.value })} rows={3} /></div>
+              <button type="submit" className="btn-primary w-full justify-center py-2.5">{editingWarehouse ? 'Guardar Cambios' : 'Crear Bodega'}</button>
+            </form>
+          </div>
+        </div>
+      , document.body)}
 
       {printingOrder && (
         <OrderPrintView 
