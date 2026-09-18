@@ -1,4 +1,5 @@
 import { useEffect, useState, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../lib/api';
 import { toast } from 'sonner';
 import { Plus, Trash2, DollarSign, X, Printer, Mail, User } from 'lucide-react';
@@ -256,7 +257,7 @@ export default function Payroll() {
       )}
 
       {/* Employee Form */}
-      {showForm && (
+      {showForm && createPortal(
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-content max-w-lg max-h-[90vh] overflow-y-auto" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">Vincular Empleado</h3><button onClick={() => setShowForm(false)}><X size={20} /></button></div>
@@ -318,10 +319,10 @@ export default function Payroll() {
             </form>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Liquidate Modal */}
-      {showLiquidate && (
+      {showLiquidate && createPortal(
         <div className="modal-overlay" onClick={() => setShowLiquidate(null)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex items-center gap-3 mb-4">
@@ -349,10 +350,10 @@ export default function Payroll() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
 
       {/* Payslip Modal */}
-      {showPayslip && lastLiquidation && (
+      {showPayslip && lastLiquidation && createPortal(
         <div className="modal-overlay" onClick={() => setShowPayslip(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()} style={{ maxWidth: '28rem' }}>
             <div className="flex justify-between items-center mb-4">
@@ -408,7 +409,7 @@ export default function Payroll() {
             </div>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }

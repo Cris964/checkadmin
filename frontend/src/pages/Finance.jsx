@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import api from '../lib/api';
 import { toast } from 'sonner';
 import { Plus, Wallet, TrendingDown, X, Calendar, BarChart3, PieChart, Trash2, ArrowUpRight, ArrowDownRight } from 'lucide-react';
@@ -274,7 +275,7 @@ export default function Finance() {
       )}
 
       {/* Transaction Form */}
-      {showForm && (
+      {showForm && createPortal(
         <div className="modal-overlay" onClick={() => setShowForm(false)}>
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
             <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">Nueva Transacción</h3><button onClick={() => setShowForm(false)}><X size={20} /></button></div>
@@ -317,7 +318,7 @@ export default function Finance() {
             </form>
           </div>
         </div>
-      )}
+      , document.body)}
     </div>
   );
 }
