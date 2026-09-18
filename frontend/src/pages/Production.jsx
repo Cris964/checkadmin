@@ -771,7 +771,7 @@ export default function Production() {
         {tab === 'materials' && (
           <div className="flex gap-2">
             <button onClick={() => setShowInvoiceForm(true)} className="btn-primary text-sm px-3"><Plus size={16} /> Nueva Factura</button>
-            <button onClick={() => setShowMaterialForm(true)} className="btn-primary text-sm px-3"><Plus size={16} /> Nueva Materia Prima</button>
+            <button onClick={() => setShowMaterialForm(true)} className="btn-primary text-sm px-3"><Plus size={16} /> Nuevo Insumo / Material</button>
           </div>
         )}
       </div>
@@ -1733,7 +1733,7 @@ export default function Production() {
       {showMaterialForm && createPortal(
         <div className="modal-overlay">
           <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-            <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">{editingMaterial ? 'Editar Materia Prima' : 'Nueva Materia Prima'}</h3><button onClick={() => { setShowMaterialForm(false); setEditingMaterial(null); }}><X size={20} /></button></div>
+            <div className="flex justify-between mb-4"><h3 className="text-xl font-bold">{editingMaterial ? 'Editar Insumo / Material' : 'Nuevo Insumo / Material'}</h3><button onClick={() => { setShowMaterialForm(false); setEditingMaterial(null); }}><X size={20} /></button></div>
             <form onSubmit={createMaterial} className="space-y-3">
               <div className="grid grid-cols-2 gap-3">
                 <div>
