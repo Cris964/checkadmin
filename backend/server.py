@@ -1604,6 +1604,14 @@ async def update_production_order(order_id: str, order_data: ProductionOrderUpda
         order_dict['updated_at'] = datetime.fromisoformat(order_dict['updated_at'])
     return ProductionOrder(**order_dict)
 
+@api_router.delete("/production-orders/{order_id}")
+async def delete_production_order(order_id: str, current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    result = await database.production_orders.delete_one({"id": order_id, "company_id": current_user["company_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Order not found")
+    return {"message": "Order deleted"}
+
 @api_router.post("/production-orders/{order_id}/advance", response_model=ProductionOrder)
 async def advance_production_order(order_id: str, data: ProductionOrderAdvance, current_user: dict = Depends(get_current_user)):
     database = get_db()

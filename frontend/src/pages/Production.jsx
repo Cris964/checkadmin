@@ -5,7 +5,7 @@ import { toast } from 'sonner';
 import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2, Trash2, Search, Printer } from 'lucide-react';
 import OrderPrintView from '../components/OrderPrintView';
 
-const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipes, rawMaterials, advanceOrder, setAdvancingOrder, expandedOrder, setExpandedOrder, warehouses, fmt, setPrintingOrder }) => {
+const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipes, rawMaterials, advanceOrder, setAdvancingOrder, expandedOrder, setExpandedOrder, warehouses, fmt, setPrintingOrder, deleteOrder }) => {
   const [localChecklist, setLocalChecklist] = useState([]);
   const [responsable, setResponsable] = useState('');
   const [observations, setObservations] = useState('');
@@ -66,6 +66,10 @@ const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipe
 
         <button onClick={() => setPrintingOrder(o)} className={`p-2 rounded-lg transition-colors hover:bg-gray-100 text-gray-400`} title="Imprimir Orden (F-PN-013)">
           <Printer size={20} />
+        </button>
+
+        <button onClick={() => deleteOrder(o.id)} className={`p-2 rounded-lg transition-colors hover:bg-red-50 text-gray-400 hover:text-red-500`} title="Eliminar Orden">
+          <Trash2 size={20} />
         </button>
 
         {nextStage && o.stage === 'montada' && (
@@ -519,6 +523,39 @@ export default function Production() {
     setShowRecipeForm(true);
   };
 
+  const deleteWarehouse = async (id) => {
+    if (!window.confirm('¿Eliminar esta bodega permanentemente?')) return;
+    try {
+      await api.delete(`warehouses/${id}`);
+      toast.success('Bodega eliminada');
+      loadData();
+    } catch (e) {
+      toast.error('Error al eliminar bodega');
+    }
+  };
+
+  const deleteMaterial = async (id) => {
+    if (!window.confirm('¿Eliminar este insumo permanentemente?')) return;
+    try {
+      await api.delete(`raw-materials/${id}`);
+      toast.success('Insumo eliminado');
+      loadData();
+    } catch (e) {
+      toast.error('Error al eliminar insumo');
+    }
+  };
+
+  const deleteInvoice = async (id) => {
+    if (!window.confirm('¿Eliminar esta factura permanentemente?')) return;
+    try {
+      await api.delete(`purchase-invoices/${id}`);
+      toast.success('Factura eliminada');
+      loadData();
+    } catch (e) {
+      toast.error('Error al eliminar factura');
+    }
+  };
+
   const deleteRecipe = async (id) => {
     if (!window.confirm('¿Eliminar esta receta permanentemente?')) return;
     try {
@@ -527,6 +564,17 @@ export default function Production() {
       loadData();
     } catch (e) {
       toast.error('Error al eliminar receta');
+    }
+  };
+
+  const deleteOrder = async (id) => {
+    if (!window.confirm('¿Eliminar esta orden de producción permanentemente?')) return;
+    try {
+      await api.delete(`production-orders/${id}`);
+      toast.success('Orden eliminada');
+      loadData();
+    } catch (e) {
+      toast.error('Error al eliminar orden');
     }
   };
 
@@ -775,6 +823,7 @@ export default function Production() {
                       setExpandedOrder={setExpandedOrder}
                       setPrintingOrder={setPrintingOrder}
                       warehouses={warehouses}
+                      deleteOrder={deleteOrder}
                       fmt={fmt}
                     />
                   ))}
@@ -910,6 +959,9 @@ export default function Production() {
                     <button onClick={() => handleEditMaterial(m)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-primary-600 transition-colors">
                       <Edit2 size={16} />
                     </button>
+                    <button onClick={() => deleteMaterial(m.id)} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
+                      <Trash2 size={16} />
+                    </button>
                   </div>
                 </div>
               </div>
@@ -949,7 +1001,23 @@ export default function Production() {
                         <p className="text-xs text-gray-500">{materialsInWarehouse.length} materias primas</p>
                       </div>
                     </div>
-                    <ChevronRight size={20} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                    <div className="flex items-center gap-2">
+                      <button
+                        onClick={(e) => { e.stopPropagation(); setEditingWarehouse(w); setWhForm(w); setShowWarehouseForm(true); }}
+                        className="p-1.5 hover:bg-blue-100 rounded-lg text-blue-500 transition-colors"
+                        title="Editar Bodega"
+                      >
+                        <Edit2 size={16} />
+                      </button>
+                      <button
+                        onClick={(e) => { e.stopPropagation(); deleteWarehouse(w.id); }}
+                        className="p-1.5 hover:bg-red-100 rounded-lg text-red-500 transition-colors"
+                        title="Eliminar Bodega"
+                      >
+                        <Trash2 size={16} />
+                      </button>
+                      <ChevronRight size={20} className={`text-gray-400 transition-transform ${isExpanded ? 'rotate-90' : ''}`} />
+                    </div>
                   </div>
                   
                   {isExpanded && (
@@ -1011,7 +1079,12 @@ export default function Production() {
                         <td className="px-4 py-3 font-medium">{inv.invoice_number || '—'}</td>
                         <td className="px-4 py-3 font-bold text-primary-600">{fmt(inv.total_amount || inv.total || 0)}</td>
                         <td className="px-4 py-3 text-xs text-gray-500">{inv.created_at ? new Date(inv.created_at).toLocaleDateString('es-CO') : '—'}</td>
-                        <td className="px-4 py-3 text-right"><ChevronRight size={16} className={`inline transition-transform ${expandedOrder === inv.id ? 'rotate-90' : ''}`} /></td>
+                        <td className="px-4 py-3 text-right">
+                          <button onClick={(e) => { e.stopPropagation(); deleteInvoice(inv.id); }} className="p-1 mr-2 hover:bg-red-50 rounded text-gray-400 hover:text-red-500 transition-colors" title="Eliminar Factura">
+                            <Trash2 size={16} className="inline" />
+                          </button>
+                          <ChevronRight size={16} className={`inline transition-transform ${expandedOrder === inv.id ? 'rotate-90' : ''}`} />
+                        </td>
                       </tr>
                       {expandedOrder === inv.id && (
                         <tr>
