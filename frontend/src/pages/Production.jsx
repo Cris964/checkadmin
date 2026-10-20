@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import api, { getAssetUrl } from '../lib/api';
 import { toast } from 'sonner';
-import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2, Trash2, Search, Printer } from 'lucide-react';
+import { Plus, X, ChevronRight, FlaskConical, Boxes, Clock, List, DollarSign, User, Home, Edit2, Trash2, Search, Printer, ArrowUpDown, ArrowUpRight, ArrowDownRight } from 'lucide-react';
 import OrderPrintView from '../components/OrderPrintView';
 
 const OrderCard = ({ o, stages, stageColors, stageIdx, getRecipeForOrder, recipes, rawMaterials, advanceOrder, setAdvancingOrder, expandedOrder, setExpandedOrder, warehouses, fmt, setPrintingOrder, deleteOrder }) => {
@@ -353,6 +353,9 @@ export default function Production() {
   const [selectedMaterialFile, setSelectedMaterialFile] = useState(null);
   const [searchMaterials, setSearchMaterials] = useState('');
   const [filterWarehouse, setFilterWarehouse] = useState('');
+  const [filterCategory, setFilterCategory] = useState('');
+  const [showStockModal, setShowStockModal] = useState(false);
+  const [stockAdjustForm, setStockAdjustForm] = useState({ material_id: '', type: 'in', quantity: '', reason: '' });
   const [searchRecipes, setSearchRecipes] = useState('');
   const [purchaseInvoices, setPurchaseInvoices] = useState([]);
   const [showInvoiceForm, setShowInvoiceForm] = useState(false);
@@ -648,6 +651,38 @@ export default function Production() {
     }
   };
 
+  const handleStockAdjustment = async (e) => {
+    e.preventDefault();
+    const { material_id, type, quantity, reason } = stockAdjustForm;
+    const qty = parseFloat(quantity);
+    if (!material_id || !qty || qty <= 0) {
+      return toast.error('Ingrese una cantidad válida mayor a cero');
+    }
+    
+    setUploading(true);
+    const selected = (rawMaterials || []).find(m => m.id === material_id);
+    const currentStock = selected?.current_stock || 0;
+    const newStock = type === 'in' ? currentStock + qty : Math.max(0, currentStock - qty);
+
+    try {
+      try {
+        await api.post(`raw-materials/${material_id}/adjust-stock`, { type, quantity: qty, reason });
+      } catch (err) {
+        await api.put(`raw-materials/${material_id}`, { current_stock: newStock });
+      }
+      
+      toast.success(`${type === 'in' ? 'Entrada (+)' : 'Salida (-)'} registrada. Nuevo saldo: ${newStock} ${selected?.unit || ''}`);
+      setShowStockModal(false);
+      setStockAdjustForm({ material_id: '', type: 'in', quantity: '', reason: '' });
+      loadData();
+    } catch (err) {
+      console.error(err);
+      toast.error(err.response?.data?.detail || 'Error al actualizar saldo de inventario');
+    } finally {
+      setUploading(false);
+    }
+  };
+
   const addInvoiceItem = () => {
     if (!currentInvoiceItem.raw_material_name && !currentInvoiceItem.raw_material_id) return toast.error('Debe seleccionar o escribir un producto');
     if (!currentInvoiceItem.quantity || !currentInvoiceItem.unit_price) return toast.error('Debe ingresar cantidad y precio');
@@ -769,7 +804,10 @@ export default function Production() {
           setShowRecipeForm(true);
         }} className="btn-primary"><Plus size={16} /> Nueva Receta</button>}
         {tab === 'materials' && (
-          <div className="flex gap-2">
+          <div className="flex flex-wrap gap-2">
+            <button onClick={() => { setStockAdjustForm({ material_id: '', type: 'in', quantity: '', reason: '' }); setShowStockModal(true); }} className="btn-secondary text-sm px-3 flex items-center gap-1.5 border border-emerald-300 text-emerald-700 bg-emerald-50 hover:bg-emerald-100 font-semibold">
+              <ArrowUpDown size={16} className="text-emerald-600" /> Entrada / Salida
+            </button>
             <button onClick={() => setShowInvoiceForm(true)} className="btn-primary text-sm px-3"><Plus size={16} /> Nueva Factura</button>
             <button onClick={() => setShowMaterialForm(true)} className="btn-primary text-sm px-3"><Plus size={16} /> Nuevo Insumo / Material</button>
           </div>
@@ -910,10 +948,21 @@ export default function Production() {
         <div className="mb-4 p-4 pb-0 flex flex-col sm:flex-row gap-3">
           <div className="relative flex-1">
             <Search size={18} className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400"/>
-            <input type="text" placeholder="Buscar materia prima..." value={searchMaterials} onChange={e => setSearchMaterials(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-300"/>
+            <input type="text" placeholder="Buscar insumo, material, envase..." value={searchMaterials} onChange={e => setSearchMaterials(e.target.value)} className="w-full pl-10 pr-4 py-2 border rounded-lg bg-white text-sm focus:ring-2 focus:ring-blue-300"/>
           </div>
           <select 
-            className="w-full sm:w-64 p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-300"
+            className="w-full sm:w-52 p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-300"
+            value={filterCategory}
+            onChange={(e) => setFilterCategory(e.target.value)}
+          >
+            <option value="">Todas las categorías</option>
+            <option value="Materia Prima">Materia Prima</option>
+            <option value="Material de Envase">Material de Envase</option>
+            <option value="Etiquetas">Etiquetas</option>
+            <option value="Cajas">Cajas</option>
+          </select>
+          <select 
+            className="w-full sm:w-52 p-2 border border-gray-200 rounded-lg text-sm focus:ring-2 focus:ring-blue-300"
             value={filterWarehouse}
             onChange={(e) => setFilterWarehouse(e.target.value)}
           >
@@ -926,13 +975,14 @@ export default function Production() {
 
       {tab === 'materials' && (
         <div className="glass-card overflow-hidden">
-          {(rawMaterials || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas</p> : (
+          {(rawMaterials || []).length === 0 ? <p className="text-gray-400 text-center py-8">No hay materias primas ni insumos</p> : (
             <div className="overflow-x-auto">
                 {rawMaterials.filter(m => { 
                   const q = searchMaterials.toLowerCase(); 
                   const matchesSearch = !q || m.name?.toLowerCase().includes(q) || m.sku?.toLowerCase().includes(q) || getWarehouseName(m.warehouse_id)?.toLowerCase().includes(q); 
                   const matchesWarehouse = !filterWarehouse ? true : (filterWarehouse === 'none' ? !m.warehouse_id : m.warehouse_id === filterWarehouse);
-                  return matchesSearch && matchesWarehouse;
+                  const matchesCategory = !filterCategory ? true : (m.category || 'Materia Prima') === filterCategory;
+                  return matchesSearch && matchesWarehouse && matchesCategory;
                 }).map((m) => (
                   <div key={m.id} className="data-row gap-4 border-b border-gray-100 last:border-0 hover:bg-gray-50 transition-colors">
                 <Boxes size={22} className="text-primary-400 flex-shrink-0" />
@@ -941,10 +991,20 @@ export default function Production() {
                     <p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Nombre</p>
                     <p className="font-bold text-sm text-gray-800">{m.name}</p>
                     <p className="text-xs text-gray-500">{m.sku}</p>
-                    <p className="text-[10px] text-blue-500 font-medium">
-                      <Home size={10} className="inline mr-1" />
-                      {m.warehouse_id ? ((warehouses || []).find(w => w.id === m.warehouse_id)?.name || 'Bodega desconocida') : 'Sin bodega'}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-1.5 mt-1">
+                      <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold ${
+                        (m.category || 'Materia Prima') === 'Material de Envase' ? 'bg-purple-100 text-purple-700 border border-purple-200' :
+                        (m.category || 'Materia Prima') === 'Etiquetas' ? 'bg-amber-100 text-amber-700 border border-amber-200' :
+                        (m.category || 'Materia Prima') === 'Cajas' ? 'bg-orange-100 text-orange-700 border border-orange-200' :
+                        'bg-blue-100 text-blue-700 border border-blue-200'
+                      }`}>
+                        {m.category || 'Materia Prima'}
+                      </span>
+                      <span className="text-[10px] text-blue-500 font-medium">
+                        <Home size={10} className="inline mr-0.5" />
+                        {m.warehouse_id ? ((warehouses || []).find(w => w.id === m.warehouse_id)?.name || 'Bodega') : 'Sin bodega'}
+                      </span>
+                    </div>
                   </div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Stock</p><p className={`font-bold text-sm ${m.current_stock <= m.min_stock ? 'text-red-600' : 'text-green-600'}`}>{m.current_stock} {m.unit}</p></div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Precio Compra</p><p className="font-medium text-xs text-gray-700">{fmt(m.purchase_price)}</p></div>
@@ -954,12 +1014,22 @@ export default function Production() {
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Vence</p><p className="font-medium text-xs text-gray-700">{m.vencimiento || '—'}</p></div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Costo Total</p><p className="font-bold text-sm text-gray-800">{fmt((m.cost_per_unit || m.purchase_price || 0) * (m.current_stock || 0))}</p></div>
                   <div><p className="text-[10px] text-gray-400 font-bold uppercase tracking-wider">Proveedor</p><p className="font-medium text-xs text-gray-600 truncate">{m.supplier || '—'}</p></div>
-                  <div className="flex items-center justify-end gap-2 col-span-2 sm:col-span-1 md:col-span-1">
+                  <div className="flex items-center justify-end gap-1.5 col-span-2 sm:col-span-1 md:col-span-1">
                     {m.image_url && <img src={m.image_url.startsWith('http') ? m.image_url : `https://checkadmin-api.onrender.com${m.image_url}`} alt={m.name} className="w-8 h-8 rounded object-cover border border-gray-200" />}
-                    <button onClick={() => handleEditMaterial(m)} className="p-2 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-primary-600 transition-colors">
+                    <button 
+                      onClick={() => {
+                        setStockAdjustForm({ material_id: m.id, type: 'in', quantity: '', reason: '' });
+                        setShowStockModal(true);
+                      }} 
+                      className="p-1.5 hover:bg-emerald-50 rounded-lg text-emerald-600 transition-colors"
+                      title="Registrar Entrada / Salida (Ajustar saldo)"
+                    >
+                      <ArrowUpDown size={16} />
+                    </button>
+                    <button onClick={() => handleEditMaterial(m)} className="p-1.5 hover:bg-gray-100 rounded-lg text-gray-400 hover:text-primary-600 transition-colors" title="Editar">
                       <Edit2 size={16} />
                     </button>
-                    <button onClick={() => deleteMaterial(m.id)} className="p-2 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors">
+                    <button onClick={() => deleteMaterial(m.id)} className="p-1.5 hover:bg-red-50 rounded-lg text-gray-400 hover:text-red-500 transition-colors" title="Eliminar">
                       <Trash2 size={16} />
                     </button>
                   </div>
@@ -1811,6 +1881,155 @@ export default function Production() {
           }}
         />
       )}
+
+      {/* Quick Stock Adjustment Modal (Entradas y Salidas) */}
+      {showStockModal && createPortal(
+        <div className="modal-overlay" onClick={() => setShowStockModal(false)}>
+          <div className="modal-content max-w-md" onClick={(e) => e.stopPropagation()}>
+            <div className="flex justify-between items-center mb-4">
+              <h3 className="text-xl font-bold flex items-center gap-2">
+                <ArrowUpDown className="text-emerald-600" size={22} />
+                Entrada / Salida de Stock
+              </h3>
+              <button onClick={() => setShowStockModal(false)}><X size={20} /></button>
+            </div>
+
+            <form onSubmit={handleStockAdjustment} className="space-y-4">
+              <div>
+                <label className="block text-sm font-semibold mb-1">Insumo / Material / Envase</label>
+                <select 
+                  value={stockAdjustForm.material_id} 
+                  onChange={(e) => setStockAdjustForm({ ...stockAdjustForm, material_id: e.target.value })}
+                  className="w-full"
+                  required
+                >
+                  <option value="">Seleccione un ítem...</option>
+                  {(rawMaterials || []).map((m) => (
+                    <option key={m.id} value={m.id}>
+                      {m.name} ({m.category || 'Materia Prima'}) — Saldo actual: {m.current_stock || 0} {m.unit}
+                    </option>
+                  ))}
+                </select>
+              </div>
+
+              {(() => {
+                const selected = (rawMaterials || []).find(m => m.id === stockAdjustForm.material_id);
+                const currentStock = selected?.current_stock || 0;
+                const qty = parseFloat(stockAdjustForm.quantity) || 0;
+                const newStock = stockAdjustForm.type === 'in' ? (currentStock + qty) : (currentStock - qty);
+
+                return (
+                  <>
+                    {selected && (
+                      <div className="p-3 bg-gray-50 rounded-xl border border-gray-200 text-xs flex justify-between items-center">
+                        <div>
+                          <span className="text-gray-500 font-medium">Saldo actual en sistema:</span>
+                          <p className="font-bold text-base text-gray-800">{currentStock} {selected.unit}</p>
+                        </div>
+                        <span className={`px-2.5 py-1 rounded-full text-[11px] font-bold ${
+                          selected.category === 'Material de Envase' ? 'bg-purple-100 text-purple-700' :
+                          selected.category === 'Etiquetas' ? 'bg-amber-100 text-amber-700' :
+                          selected.category === 'Cajas' ? 'bg-orange-100 text-orange-700' :
+                          'bg-blue-100 text-blue-700'
+                        }`}>
+                          {selected.category || 'Materia Prima'}
+                        </span>
+                      </div>
+                    )}
+
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        type="button"
+                        onClick={() => setStockAdjustForm({ ...stockAdjustForm, type: 'in' })}
+                        className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                          stockAdjustForm.type === 'in' 
+                            ? 'border-emerald-500 bg-emerald-50 text-emerald-800 font-bold ring-2 ring-emerald-300' 
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <ArrowUpRight size={22} className="text-emerald-600" />
+                        <span className="text-sm">ENTRADA (+)</span>
+                        <span className="text-[10px] font-normal text-emerald-700">Llegó stock / Sumar</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        onClick={() => setStockAdjustForm({ ...stockAdjustForm, type: 'out' })}
+                        className={`p-3 rounded-xl border flex flex-col items-center gap-1 transition-all ${
+                          stockAdjustForm.type === 'out' 
+                            ? 'border-red-500 bg-red-50 text-red-800 font-bold ring-2 ring-red-300' 
+                            : 'border-gray-200 bg-white text-gray-600 hover:bg-gray-50'
+                        }`}
+                      >
+                        <ArrowDownRight size={22} className="text-red-600" />
+                        <span className="text-sm">SALIDA (-)</span>
+                        <span className="text-[10px] font-normal text-red-700">Consumo / Restar</span>
+                      </button>
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-semibold mb-1">
+                        Cantidad a {stockAdjustForm.type === 'in' ? 'Sumar (+)' : 'Restar (-)'}
+                      </label>
+                      <div className="flex items-center gap-2">
+                        <input 
+                          type="number" 
+                          step="0.01" 
+                          min="0.01"
+                          placeholder="Ej: 780" 
+                          value={stockAdjustForm.quantity} 
+                          onChange={(e) => setStockAdjustForm({ ...stockAdjustForm, quantity: e.target.value })}
+                          required
+                          className="flex-1 font-bold text-lg"
+                        />
+                        <span className="font-semibold text-gray-500 text-sm">
+                          {selected?.unit || 'unidades'}
+                        </span>
+                      </div>
+                    </div>
+
+                    {selected && qty > 0 && (
+                      <div className={`p-3 rounded-xl border flex justify-between items-center text-sm ${
+                        stockAdjustForm.type === 'in' ? 'bg-emerald-50 border-emerald-200 text-emerald-900' : 'bg-red-50 border-red-200 text-red-900'
+                      }`}>
+                        <div>
+                          <span className="text-xs opacity-75">Cálculo de nuevo saldo:</span>
+                          <p className="font-medium text-xs">
+                            {currentStock} {stockAdjustForm.type === 'in' ? '+' : '-'} {qty}
+                          </p>
+                        </div>
+                        <div className="text-right">
+                          <span className="text-xs opacity-75 font-semibold">NUEVO SALDO:</span>
+                          <p className="font-bold text-lg">{newStock} {selected.unit}</p>
+                        </div>
+                      </div>
+                    )}
+
+                    <div>
+                      <label className="block text-sm font-semibold mb-1">Motivo / Factura (Opcional)</label>
+                      <input 
+                        type="text" 
+                        placeholder="Ej: Llegaron envases del proveedor, ajuste por merma..." 
+                        value={stockAdjustForm.reason} 
+                        onChange={(e) => setStockAdjustForm({ ...stockAdjustForm, reason: e.target.value })}
+                      />
+                    </div>
+
+                    <div className="flex gap-2 pt-2">
+                      <button type="button" onClick={() => setShowStockModal(false)} className="flex-1 px-4 py-2.5 bg-gray-100 hover:bg-gray-200 rounded-lg text-gray-700">
+                        Cancelar
+                      </button>
+                      <button type="submit" disabled={uploading || !stockAdjustForm.material_id || !qty} className={`flex-1 ${stockAdjustForm.type === 'in' ? 'btn-success' : 'btn-primary'} justify-center py-2.5`}>
+                        {uploading ? 'Guardando...' : `Confirmar ${stockAdjustForm.type === 'in' ? 'Entrada (+)' : 'Salida (-)'}`}
+                      </button>
+                    </div>
+                  </>
+                );
+              })()}
+            </form>
+          </div>
+        </div>
+      , document.body)}
 
       {/* New Warehouse Modal */}
       {showWarehouseForm && createPortal(

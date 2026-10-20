@@ -439,6 +439,11 @@ class RawMaterialUpdate(BaseModel):
     vencimiento: Optional[str] = None
     warehouse_id: Optional[str] = None
 
+class StockAdjustment(BaseModel):
+    type: str  # "in" or "out"
+    quantity: float
+    reason: Optional[str] = None
+
 # --- Purchase Invoices ---
 class PurchaseInvoiceItem(BaseModel):
     raw_material_id: Optional[str] = None
@@ -1307,6 +1312,25 @@ async def delete_raw_material(material_id: str, current_user: dict = Depends(get
     if result.deleted_count == 0:
         raise HTTPException(status_code=404, detail="Raw material not found")
     return {"message": "Raw material deleted"}
+
+@api_router.post("/raw-materials/{material_id}/adjust-stock", response_model=RawMaterial)
+async def adjust_raw_material_stock(material_id: str, data: StockAdjustment, current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    qty = abs(data.quantity)
+    if data.type == "out":
+        qty = -qty
+    
+    result = await database.raw_materials.update_one(
+        {"id": material_id, "company_id": current_user["company_id"]},
+        {"$inc": {"current_stock": qty}}
+    )
+    if result.matched_count == 0:
+        raise HTTPException(status_code=404, detail="Raw material not found")
+        
+    mat = await database.raw_materials.find_one({"id": material_id}, {"_id": 0})
+    if isinstance(mat.get('created_at'), str):
+        mat['created_at'] = datetime.fromisoformat(mat['created_at'])
+    return RawMaterial(**mat)
 
 # --- Purchase Invoices ---
 @api_router.get("/purchase-invoices")
