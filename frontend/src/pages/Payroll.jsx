@@ -92,6 +92,18 @@ export default function Payroll() {
     await api.delete(`/employees/${id}`); loadData();
   };
 
+  const deleteLiquidation = async (id, e) => {
+    e?.stopPropagation();
+    if (!confirm('¿Eliminar esta liquidación de nómina permanentemente?')) return;
+    try {
+      await api.delete(`/payroll/${id}`);
+      toast.success('Liquidación eliminada');
+      loadData();
+    } catch (err) {
+      toast.error(err.response?.data?.detail || 'Error al eliminar la liquidación');
+    }
+  };
+
   const liquidate = async () => {
     if (!showLiquidate) return;
     try {
@@ -221,9 +233,18 @@ export default function Payroll() {
                     <p className="text-xs text-gray-400">{new Date(l.created_at).toLocaleString('es-CO')} · {l.days_worked} días · {l.extra_hours} HE</p>
                   </div>
                 </div>
-                <div className="text-right">
-                  <p className="text-xl font-bold text-green-600">{fmt(l.net_salary)}</p>
-                  <p className="text-xs text-gray-400">Costo empresa: {fmt(l.employer_total_cost)}</p>
+                <div className="flex items-center gap-3">
+                  <div className="text-right">
+                    <p className="text-xl font-bold text-green-600">{fmt(l.net_salary)}</p>
+                    <p className="text-xs text-gray-400">Costo empresa: {fmt(l.employer_total_cost)}</p>
+                  </div>
+                  <button 
+                    onClick={(e) => deleteLiquidation(l.id, e)}
+                    className="p-2 hover:bg-red-50 text-gray-400 hover:text-red-500 rounded-lg transition-colors"
+                    title="Eliminar liquidación"
+                  >
+                    <Trash2 size={18} />
+                  </button>
                 </div>
               </div>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 mt-3 text-xs bg-gray-50 rounded-lg p-3">

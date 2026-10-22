@@ -1102,12 +1102,22 @@ export default function Production() {
                                 <p className="font-semibold text-gray-800 truncate">{m.name}</p>
                                 <p className="text-xs text-gray-500">{m.sku} • Stock: <span className="font-bold">{m.current_stock}</span> {m.unit}</p>
                               </div>
-                              <button 
-                                onClick={(e) => { e.stopPropagation(); setEditingMaterial(m); setShowMaterialForm(true); }}
-                                className="p-1.5 text-blue-500 hover:bg-blue-50 rounded flex items-center gap-1 transition-colors"
-                              >
-                                <Edit2 size={14} /> <span className="text-xs font-medium">Editar</span>
-                              </button>
+                              <div className="flex items-center gap-1">
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); setStockAdjustForm({ material_id: m.id, type: 'in', quantity: '', reason: '' }); setShowStockModal(true); }}
+                                  className="p-1.5 text-emerald-600 hover:bg-emerald-50 rounded flex items-center gap-1 transition-colors"
+                                  title="Entrada / Salida de Stock"
+                                >
+                                  <ArrowUpDown size={14} />
+                                </button>
+                                <button 
+                                  onClick={(e) => { e.stopPropagation(); handleEditMaterial(m); }}
+                                  className="p-1.5 text-blue-500 hover:bg-blue-50 rounded flex items-center gap-1 transition-colors"
+                                  title="Editar Insumo"
+                                >
+                                  <Edit2 size={14} /> <span className="text-xs font-medium">Editar</span>
+                                </button>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -1810,7 +1820,7 @@ export default function Production() {
                   <label className="block text-sm font-semibold mb-1">Categoría</label>
                   <select value={materialForm.category || 'Materia Prima'} onChange={(e) => setMaterialForm({ ...materialForm, category: e.target.value })} className="w-full">
                     <option value="Materia Prima">Materia Prima</option>
-                    <option value="Material de Envase">Material de Envase</option>
+                    <option value="Material de Envase">Material de Empaque / Envase</option>
                     <option value="Etiquetas">Etiquetas</option>
                     <option value="Cajas">Cajas</option>
                   </select>

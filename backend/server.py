@@ -2046,6 +2046,14 @@ async def liquidate_payroll(liquidation_data: PayrollLiquidationCreate, current_
     
     return liquidation
 
+@api_router.delete("/payroll/{liquidation_id}")
+async def delete_payroll_liquidation(liquidation_id: str, current_user: dict = Depends(get_current_user)):
+    database = get_db()
+    result = await database.payroll.delete_one({"id": liquidation_id, "company_id": current_user["company_id"]})
+    if result.deleted_count == 0:
+        raise HTTPException(status_code=404, detail="Liquidación no encontrada")
+    return {"message": "Liquidación eliminada"}
+
 # ==================== TRANSACTIONS ====================
 
 @api_router.get("/transactions", response_model=List[Transaction])
